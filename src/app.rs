@@ -114,7 +114,7 @@ impl eframe::App for TemplateApp {
             let circle_center = Pos2{x:40., y: 40.};
             let circle_text = if self.sw1_isclosed {"closed"} else {"open"};
             ui.painter().circle(circle_center, 20., Color32::from_rgb(255, 255, 255), Stroke { width: 3., color: Color32::from_rgb(self.i1_duty, 0, 0)});
-            ui.text(circle_center, circle_text, &egui::Color32::BLACK);
+            ui.put(circle_rect, egui::Label::new(circle_text));
             if ui.interact(circle_rect, egui::Id::new("SW1_representation"), Sense::click()).clicked() {
                 if self.sw1_isclosed {
                     self.sw1_isclosed = false;
