@@ -7,6 +7,10 @@ pub struct TemplateApp {
 
     #[serde(skip)] // This how you opt-out of serialization of a field
     value: f32,
+
+    bool: sw1_isclosed,
+    bool: sw2_isclosed,
+    bool: sw3_isclosed,
 }
 
 impl Default for TemplateApp {
