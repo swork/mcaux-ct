@@ -18,12 +18,13 @@ pub struct TemplateApp {
     sw1_isclosed: bool,
     sw2_isclosed: bool,
 
-    i0_duty: f32,
-    i1_duty: f32,
-    i2_duty: f32,
-    i3r_duty: f32,
-    i3g_duty: f32,
-    i3b_duty: f32,
+    // duty cycles are 0-255 to save silly calcs
+    i0_duty: u8,
+    i1_duty: u8,
+    i2_duty: u8,
+    i3r_duty: u8,
+    i3g_duty: u8,
+    i3b_duty: u8,
 }
 
 impl Default for TemplateApp {
@@ -35,12 +36,12 @@ impl Default for TemplateApp {
             sw0_isclosed: false,
             sw1_isclosed: false,
             sw2_isclosed: false,
-            i0_duty: 1.,
-            i1_duty: 1.,
-            i2_duty: 1.,
-            i3r_duty: 1.,
-            i3g_duty: 1.,
-            i3b_duty: 1.,
+            i0_duty: 1,
+            i1_duty: 1,
+            i2_duty: 1,
+            i3r_duty: 1,
+            i3g_duty: 1,
+            i3b_duty: 1,
         }
     }
 }
@@ -109,10 +110,11 @@ impl eframe::App for TemplateApp {
             ui.separator();
             */
 
-            let circle_rect = Rect { min: Pos2{x: 20., y: 20.}, max: Pos2{x: 40., y: 40.}};
-            //let circle_text = if self.sw1_isclosed {"closed"} else {"open"};
-            //let circle_text_color = if self.i1_duty < 50. {Color32::from_rgb(255, 255, 255)} else {Color32::from_rgb(0, 0, 0)};
-            ui.painter().circle(Pos2{x:40., y: 40.}, 40., Color32::from_rgb(0, 0, 0), Stroke { width: 1., color: Color32::from_rgb(0, 0, 0)});
+            let circle_rect = Rect { min: Pos2{x: 20., y: 20.}, max: Pos2{x: 60., y: 60.}};
+            let circle_center = Pos2{x:40., y: 40.};
+            let circle_text = if self.sw1_isclosed {"closed"} else {"open"};
+            ui.painter().circle(circle_center, 20., Color32::from_rgb(255, 255, 255), Stroke { width: 3., color: Color32::from_rgb(self.i1_duty, 0, 0)});
+            ui.text(circle_center, circle_text, &egui::Color32::BLACK);
             if ui.interact(circle_rect, egui::Id::new("SW1_representation"), Sense::click()).clicked() {
                 if self.sw1_isclosed {
                     self.sw1_isclosed = false;
