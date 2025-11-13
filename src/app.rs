@@ -88,10 +88,10 @@ impl eframe::App for TemplateApp {
 
             ui.separator();
 
-            ui.checkbox(&mut sw1_isclosed, "Unchecked");
+            ui.checkbox(&mut self.sw1_isclosed, "Unchecked");
             ui.label("RGBIndicator");
-            ui.checkbox(&mut sw2_isclosed, "Unchecked");
-            ui.checkbox(&mut sw3_isclosed, "Unchecked");
+            ui.checkbox(&mut self.sw2_isclosed, "Unchecked");
+            ui.checkbox(&mut self.sw3_isclosed, "Unchecked");
 
             ui.add(egui::github_link_file!(
                 "https://github.com/emilk/eframe_template/blob/main/",
