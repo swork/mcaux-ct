@@ -1,3 +1,9 @@
+use egui::Color32;
+use egui::Pos2;
+use egui::Rect;
+use egui::Sense;
+use egui::Stroke;
+
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -90,14 +96,15 @@ impl eframe::App for TemplateApp {
             ui.separator();
             */
 
-            egui::Grid::new("grid").show(ui, |ui| {
-                ui.checkbox(&mut self.sw1_isclosed, "Red USB");
-                ui.label("RGBIndicator");
-                ui.end_row();
-                ui.checkbox(&mut self.sw2_isclosed, "White Lights");
-                ui.checkbox(&mut self.sw3_isclosed, "Blue Heater");
-                ui.end_row();
-            });
+            let circle_rect = Rect { min: Pos2{x: 20., y: 20.}, max: Pos2{x: 40., y: 40.}};
+            ui.painter().circle(Pos2{x:40., y: 40.}, 40., Color32::from_rgb(0, 0, 0), Stroke { width: 1., color: Color32::from_rgb(0, 0, 0)});
+            if ui.interact(circle_rect, egui::Id::new("SW1"), Sense::click()).clicked() {
+                if self.sw1_isclosed {
+                    self.sw1_isclosed = false;
+                } else {
+                    self.sw1_isclosed = true;
+                }
+            }
 
             /*
             ui.add(egui::github_link_file!(
@@ -105,7 +112,7 @@ impl eframe::App for TemplateApp {
                 "Source code."
             ));
             */
-            
+
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 powered_by_egui_and_eframe(ui);
                 egui::warn_if_debug_build(ui);
