@@ -31,9 +31,9 @@ impl Default for TemplateApp {
             switch_isclosed: [false,false, false],
             indicator_duty: [1,1,1],
             indicator_color: [
-                Color32{r:255, g:0, b:0},
-                Color32{r:255, g:255, b:255},
-                Color32{r:0, g:0, b:255}],
+                Color32::from_rgb(255,0,0),
+                Color32::from_rgb(255, 255, 255),
+                Color32::from_rgb(0, 0, 255),
             ],
             rgb_duty: [1, 1, 1],
         }
