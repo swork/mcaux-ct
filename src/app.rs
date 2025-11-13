@@ -88,10 +88,14 @@ impl eframe::App for TemplateApp {
 
             ui.separator();
 
-            ui.checkbox(&mut self.sw1_isclosed, "Unchecked");
-            ui.label("RGBIndicator");
-            ui.checkbox(&mut self.sw2_isclosed, "Unchecked");
-            ui.checkbox(&mut self.sw3_isclosed, "Unchecked");
+            egui::Grid::new("grid").show(ui, |ui| {
+                ui.checkbox(&mut self.sw1_isclosed, "Red USB");
+                ui.label("RGBIndicator");
+                ui.end_row();
+                ui.checkbox(&mut self.sw2_isclosed, "White Lights");
+                ui.checkbox(&mut self.sw3_isclosed, "Blue Heater");
+                ui.end_row();
+            }
 
             ui.add(egui::github_link_file!(
                 "https://github.com/emilk/eframe_template/blob/main/",
