@@ -86,12 +86,12 @@ impl eframe::App for TemplateApp {
             ui.separator();
 
             ui.add(egui::Grid::new("left_hand_button_panel").show(ui, |ui| {
-                ui.checkbox(mut& sw1_isclosed, "Unchecked");
+                ui.checkbox(&mut sw1_isclosed, "Unchecked");
                 ui.label("RGBIndicator");
                 ui.end_row();
 
-                ui.checkbox(mut& sw2_isclosed, "Unchecked");
-                ui.checkbox(mut& sw3_isclosed, "Unchecked");
+                ui.checkbox(&mut sw2_isclosed, "Unchecked");
+                ui.checkbox(&mut sw3_isclosed, "Unchecked");
                 ui.end_row();
             }));
 
