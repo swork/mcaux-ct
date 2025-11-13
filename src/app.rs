@@ -76,6 +76,7 @@ impl eframe::App for TemplateApp {
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.heading("MCAux CT");
 
+            /*
             ui.horizontal(|ui| {
                 ui.label("Prove it: ");
                 ui.text_edit_singleline(&mut self.label);
@@ -87,6 +88,7 @@ impl eframe::App for TemplateApp {
             }
 
             ui.separator();
+            */
 
             egui::Grid::new("grid").show(ui, |ui| {
                 ui.checkbox(&mut self.sw1_isclosed, "Red USB");
@@ -97,11 +99,13 @@ impl eframe::App for TemplateApp {
                 ui.end_row();
             });
 
+            /*
             ui.add(egui::github_link_file!(
                 "https://github.com/emilk/eframe_template/blob/main/",
                 "Source code."
             ));
-
+            */
+            
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 powered_by_egui_and_eframe(ui);
                 egui::warn_if_debug_build(ui);
