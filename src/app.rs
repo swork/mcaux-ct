@@ -85,16 +85,6 @@ impl eframe::App for TemplateApp {
 
             ui.separator();
 
-            ui.add(egui::Grid::new("left_hand_button_panel").show(ui, |ui| {
-                ui.checkbox(&mut sw1_isclosed, "Unchecked");
-                ui.label("RGBIndicator");
-                ui.end_row();
-
-                ui.checkbox(&mut sw2_isclosed, "Unchecked");
-                ui.checkbox(&mut sw3_isclosed, "Unchecked");
-                ui.end_row();
-            }));
-
             ui.add(egui::github_link_file!(
                 "https://github.com/emilk/eframe_template/blob/main/",
                 "Source code."
@@ -105,6 +95,16 @@ impl eframe::App for TemplateApp {
                 egui::warn_if_debug_build(ui);
             });
         });
+
+        ui.add(egui::Grid::new("left_hand_button_panel").show(ui, |iui| {
+            iui.checkbox(&mut sw1_isclosed, "Unchecked");
+            iui.label("RGBIndicator");
+            iui.end_row();
+
+            iui.checkbox(&mut sw2_isclosed, "Unchecked");
+            iui.checkbox(&mut sw3_isclosed, "Unchecked");
+            iui.end_row();
+        }));
     }
 }
 
