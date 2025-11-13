@@ -14,17 +14,11 @@ pub struct TemplateApp {
     #[serde(skip)] // This how you opt-out of serialization of a field
     value: f32,
 
-    sw0_isclosed: bool,
-    sw1_isclosed: bool,
-    sw2_isclosed: bool,
+    switch_isclosed: [bool; 3],
 
     // duty cycles are 0-255 to save silly calcs
-    i0_duty: u8,
-    i1_duty: u8,
-    i2_duty: u8,
-    i3r_duty: u8,
-    i3g_duty: u8,
-    i3b_duty: u8,
+    indicator_duty: [u8; 3],
+    rgb_duty: [u8; 3]
 }
 
 impl Default for TemplateApp {
@@ -33,15 +27,9 @@ impl Default for TemplateApp {
             // Example stuff:
             label: "Hello moto world!".to_owned(),
             value: 2.7,
-            sw0_isclosed: false,
-            sw1_isclosed: false,
-            sw2_isclosed: false,
-            i0_duty: 1,
-            i1_duty: 1,
-            i2_duty: 1,
-            i3r_duty: 1,
-            i3g_duty: 1,
-            i3b_duty: 1,
+            switch_isclosed: [false,false, false],
+            indicator_duty: [1,1,1],
+            rgb_duty: [1, 1, 1],
         }
     }
 }
@@ -110,16 +98,27 @@ impl eframe::App for TemplateApp {
             ui.separator();
             */
 
-            let circle_rect = Rect { min: Pos2{x: 20., y: 20.}, max: Pos2{x: 60., y: 60.}};
-            let circle_center = Pos2{x:40., y: 40.};
-            let circle_text = if self.sw1_isclosed {"closed"} else {"open"};
-            ui.painter().circle(circle_center, 20., Color32::from_rgb(255, 255, 255), Stroke { width: 3., color: Color32::from_rgb(self.i1_duty, 0, 0)});
-            ui.put(circle_rect, egui::Label::new(circle_text));
-            if ui.interact(circle_rect, egui::Id::new("SW1_representation"), Sense::click()).clicked() {
-                if self.sw1_isclosed {
-                    self.sw1_isclosed = false;
-                } else {
-                    self.sw1_isclosed = true;
+            let switch_rects: [Rect; 3] = [
+                Rect { min: Pos2{x: 50., y: 40.}, max: Pos2{x: 90., y: 80.}},
+                Rect { min: Pos2{x: 40., y: 120.}, max: Pos2{x: 80., y: 160.}},
+                Rect { min: Pos2{x: 120., y: 120.}, max: Pos2{x: 160., y: 160.}},
+            ];
+
+            for i in 0..switch_rects.len() {
+                let circle_center = Pos2{
+                    x: ((switch_rects[i].max.x-switch_rects[i].min.x)/2.)+switch_rects[i].min.x,
+                    y: ((switch_rects[i].max.y-switch_rects[i].min.y)/2.)+switch_rects[i].min.y,
+                };                
+                let circle_text = if self.switch_isclosed[i] {"closed"} else {"open"};
+                ui.painter().circle(circle_center, 20., Color32::from_rgb(255, 255, 255), Stroke { width: 3., color: Color32::from_rgb(self.indicator_duty[i], 0, 0)});
+                ui.put(switch_rects[i], egui::Label::new(circle_text));
+                let id_text = format!("SW{i}_representation");
+                if ui.interact(switch_rects[i], egui::Id::new(id_text), Sense::click()).clicked() {
+                    if self.switch_isclosed[i] {
+                        self.switch_isclosed[i] = false;
+                    } else {
+                        self.switch_isclosed[i] = true;
+                    }
                 }
             }
 
