@@ -18,6 +18,7 @@ pub struct TemplateApp {
 
     // duty cycles are 0-255 to save silly calcs
     indicator_duty: [u8; 3],
+    indicator_color: [Color32; 3],
     rgb_duty: [u8; 3]
 }
 
@@ -29,6 +30,11 @@ impl Default for TemplateApp {
             value: 2.7,
             switch_isclosed: [false,false, false],
             indicator_duty: [1,1,1],
+            indicator_color: [
+                Color32{r:255, g:0, b:0},
+                Color32{r:255, g:255, b:255},
+                Color32{r:0, g:0, b:255}],
+            ],
             rgb_duty: [1, 1, 1],
         }
     }
@@ -99,9 +105,9 @@ impl eframe::App for TemplateApp {
             */
 
             let switch_rects: [Rect; 3] = [
-                Rect { min: Pos2{x: 50., y: 40.}, max: Pos2{x: 90., y: 80.}},
-                Rect { min: Pos2{x: 40., y: 120.}, max: Pos2{x: 80., y: 160.}},
-                Rect { min: Pos2{x: 120., y: 120.}, max: Pos2{x: 160., y: 160.}},
+                Rect { min: Pos2{x: 50., y: 80.}, max: Pos2{x: 90., y: 120.}},
+                Rect { min: Pos2{x: 40., y: 160.}, max: Pos2{x: 80., y: 200.}},
+                Rect { min: Pos2{x: 120., y: 160.}, max: Pos2{x: 160., y: 200.}},
             ];
 
             for i in 0..switch_rects.len() {
