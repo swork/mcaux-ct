@@ -19,6 +19,9 @@ impl Default for TemplateApp {
             // Example stuff:
             label: "Hello moto world!".to_owned(),
             value: 2.7,
+            sw1_isclosed: false,
+            sw2_isclosed: false,
+            sw3_isclosed: false,
         }
     }
 }
@@ -85,6 +88,11 @@ impl eframe::App for TemplateApp {
 
             ui.separator();
 
+            ui.checkbox(&mut sw1_isclosed, "Unchecked");
+            ui.label("RGBIndicator");
+            ui.checkbox(&mut sw2_isclosed, "Unchecked");
+            ui.checkbox(&mut sw3_isclosed, "Unchecked");
+
             ui.add(egui::github_link_file!(
                 "https://github.com/emilk/eframe_template/blob/main/",
                 "Source code."
@@ -96,15 +104,6 @@ impl eframe::App for TemplateApp {
             });
         });
 
-        ui.add(egui::Grid::new("left_hand_button_panel").show(ui, |iui| {
-            iui.checkbox(&mut sw1_isclosed, "Unchecked");
-            iui.label("RGBIndicator");
-            iui.end_row();
-
-            iui.checkbox(&mut sw2_isclosed, "Unchecked");
-            iui.checkbox(&mut sw3_isclosed, "Unchecked");
-            iui.end_row();
-        }));
     }
 }
 
