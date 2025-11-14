@@ -104,8 +104,10 @@ impl eframe::App for TemplateApp {
             ui.separator();
             */
 
+            // TODO rework to _centers
+            let switch_radii: f32 = 20.;
             let switch_rects: [Rect; 3] = [
-                Rect { min: Pos2{x: 50., y: 80.}, max: Pos2{x: 90., y: 120.}},
+                Rect { min: Pos2{x: 50., y: 80.}, max: Pos2{x: 50. + switch_radii*2., y: 80. + switch_radii*2.}},
                 Rect { min: Pos2{x: 40., y: 160.}, max: Pos2{x: 80., y: 200.}},
                 Rect { min: Pos2{x: 120., y: 160.}, max: Pos2{x: 160., y: 200.}},
             ];
