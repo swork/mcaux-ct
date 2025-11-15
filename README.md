@@ -13,6 +13,7 @@ This is the repo for mcaux-ct, my motorcycle auxiliary equipment controller, a q
 
 Bools for momentary-contact buttons, u8s for output, and a last-change timestamp make up the dynamic system state. A cycle count for each output makes up configured state: 2 for on/off, 4 might be low/med/high/off. Changed state (inputs and time) and previous state (inputs, outputs and last change time) entirely determine next state (outputs).
 
+```
 // macro these for array sizes etc.
 // AuxState::INS: u8
 // AuxState:: OUTS: [u8; N]
@@ -33,9 +34,11 @@ where
 {
     fn run(io: AuxState) -> AuxState,
 }
+```
 
 ### Concrete implementation for MC controller, with abstract driver
 
+```
 // use motorcycle_controller_hardware::Driver;
 use motorcycle_controller_web_harness::Driver;
 use momentary_controller::{AuxState, Button};
@@ -66,4 +69,4 @@ fn st(n: AuxState): AuxState {
 
 
 */
-
+```
