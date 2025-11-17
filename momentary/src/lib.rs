@@ -58,7 +58,7 @@ impl NoneState {
                 .find(|&(_, &x)| x)
                 .map(|(index, _)| index)
         {
-            if let Some(second_idx) = incoming[first_idx+1..].iter().find(|&&x| x) {
+            if let Some(_) = incoming[first_idx+1..].iter().find(|&&x| x) {
                 // multiple switches closed at the same time, unlikely in hardware but let's be robust.
                 // Note the possibility that this event could be within the double-click time of one
                 // switch or the other, making it ambiguous - did they mean to press both switches, or a double-click of that
@@ -106,7 +106,7 @@ mod test {
     fn none_from_none() {
         let mut c: MomentaryController = Default::default();
         c.add_switch();
-        let mut ins: [bool; SWITCHES] = [false; SWITCHES];
+        let ins: [bool; SWITCHES] = [false; SWITCHES];
 
         c.report(ins);
         assert_eq!(c.output, [0; OUTPUTS]);
@@ -173,7 +173,7 @@ impl OneState {
                 .find(|&(_, &x)| x)
                 .map(|(index, _)| index)
         {
-            if let Some(second_idx) = incoming[first_idx+1..].iter().find(|&&x| x) {
+            if let Some(_) = incoming[first_idx+1..].iter().find(|&&x| x) {
                 // multiple switches closed at the same time, unlikely in hardware but let's be robust.
                 // Note the possibility that this event could be within the double-click time of one
                 // switch or the other, making it ambiguous - did they mean to press both switches, or a double-click of that
@@ -200,8 +200,8 @@ impl OneState {
             {
                 // Check our work: be sure there wasn't a second switch down previously,
                 // with both released at the same moment
-                if let Some(second_idx) = self.previous.switches[first_idx+1..].iter().find(|&&x| x) {
-                    panic!("Logic problem: in state One we found two switches closed.");
+                if let Some(_) = self.previous.switches[first_idx+1..].iter().find(|&&x| x) {
+                    panic!("Logic problem: in state One we found 2 or more switches closed.");
                 }
                 
                 parent.output[first_idx] += 1;
@@ -256,6 +256,9 @@ enum Item {
 }
 
 pub struct MomentaryController {
+    /// false: configuring. true: running. One way trip between them.
+    started: bool,
+
     /// Current reported state of the system, None at start
     state: Item,
 
@@ -284,6 +287,7 @@ pub struct MomentaryController {
 impl Default for MomentaryController {
     fn default() -> Self {
         MomentaryController {
+            started: false,
             switches: 0,
             outputs: 0,
             output: [0; OUTPUTS],
@@ -307,6 +311,7 @@ impl MomentaryController {
         long_duration: Duration,
     ) -> MomentaryController {
         MomentaryController {
+            started: false,
             switches: 0,
             outputs: 0,
             output: [0; OUTPUTS],
@@ -326,6 +331,9 @@ impl MomentaryController {
     /// Add a simple switch to the system, press-on/press-off for the corresponding output.
     /// Return the index of the switch added.
     pub fn add_switch(&mut self) -> usize {
+        if self.started {
+            panic!("Don't add switches after first .report()");
+        }
         let idx = self.switches;
         self.switches += 1;
         self.outputs += 1;
@@ -336,6 +344,10 @@ impl MomentaryController {
         &mut self,
         incoming: [bool; SWITCHES],
     ) -> [u8; OUTPUTS] {
+        if ! self.started {
+            self.output = self.output_init;
+            self.started = true;
+        }
         self.state = match self.state {
             Item::None(deets) => {
                 deets.report(incoming, self)
