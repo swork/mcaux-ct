@@ -6,7 +6,6 @@ use egui::Stroke;
 
 use momentary::MomentaryController;
 
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
@@ -63,10 +62,10 @@ impl TemplateApp {
             Default::default()
         };
 
-        let (sw0_idx, out0_idx) = app.controller.add_switch(2);
-        let (sw1_idx, out1_idx) = app.controller.add_switch(2);
-        let (sw2_idx, out2_idx) = app.controller.add_switch(5);
-        let (swL_idx, outL_idx) = app.controller.augment_switch_longpress(sw0_idx, 2);
+        let (sw0_idx, _out0_idx) = app.controller.add_switch(2);
+        let (sw1_idx, _out1_idx) = app.controller.add_switch(2);
+        let (sw2_idx, _out2_idx) = app.controller.add_switch(5);
+        let (_sw_l_idx,_out_l_idx) = app.controller.augment_switch_longpress(sw0_idx, 2);
         assert!(sw0_idx == 0 && sw1_idx == 1 && sw2_idx == 2);
 
         app
@@ -75,8 +74,8 @@ impl TemplateApp {
 
 impl eframe::App for TemplateApp {
     /// Called by the framework to save state before shutdown.
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, self);
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
+//        eframe::set_value(storage, eframe::APP_KEY, self);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.

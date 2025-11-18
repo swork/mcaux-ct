@@ -9,13 +9,13 @@ const OUTPUTS: usize = 16;
 /// State when no input switches are closed; also, with recent:None, the initial state.
 #[derive(Clone, Copy)]
 struct NoneState {
-    stamp: Instant,
+    _stamp: Instant,
 }
 
 impl Default for NoneState {
     fn default() -> Self {
         NoneState {
-            stamp: Instant::now(),
+            _stamp: Instant::now(),
         }
     }
 }
@@ -121,8 +121,6 @@ impl OneState {
                     }
                     return Item::Long(
                         LongState {
-                            stamp: Instant::now(),
-                            switches: incoming,
                         });
                 } else {
                     // do nothing, keep counting time.
@@ -171,7 +169,7 @@ impl OneState {
                 }
                 return Item::None(
                     NoneState {
-                        stamp: Instant::now(),
+                        _stamp: Instant::now(),
                     });
             } else {
                 panic!("Logic trouble, no-switches-before case should have been caught above");
@@ -183,15 +181,11 @@ impl OneState {
 /// State when one switch has been held closed longer than the long-press duration. This state holds until that switch is opened.
 #[derive(Clone, Copy)]
 struct LongState {
-    stamp: Instant,
-    switches: [bool; SWITCHES],
 }
 
 impl Default for LongState {
     fn default() -> Self {
         LongState {
-            stamp: Instant::now(),
-            switches: [false; SWITCHES],
         }
     }
 }
@@ -211,7 +205,7 @@ impl LongState {
     }
 }
 
-
+/*
 /// State when one switch has been held closed briefly (less than the long-press duration), opened before the long-press duration has passed, then closed again before the double-press duration has passed; all without another switch being closed. In this state, with that initial switch closed, other switches may then be closed subsequently (but we will not recognize double- or long-presses of those subsequent switches).
 struct DoubleState {
     stamp: Instant,
@@ -223,6 +217,7 @@ struct MultiState {
     stamp: Instant,
     switches: [bool; SWITCHES],
 }
+*/
 
 enum Item {
     None(NoneState),
@@ -263,7 +258,7 @@ pub struct MomentaryController {
     output_cycles: [u8; OUTPUTS],
 
     /// Maximum open time between input closes to register a double-press event
-    double_open: Duration,
+//    double_open: Duration,
 
     /// Minimum closed time to register as long-press event
     long_closed: Duration,
@@ -280,11 +275,11 @@ impl Default for MomentaryController {
             output_init: [0; OUTPUTS],
             has_long: [false; SWITCHES],
             long: [0; SWITCHES],
-            double_open: Duration::from_millis(500),
+//            double_open: Duration::from_millis(500),
             long_closed: Duration::from_millis(2000),
             state: Item::None(
                 NoneState {
-                    stamp: Instant::now().checked_sub(Duration::from_secs(60)).expect("System clock trouble"),
+                    _stamp: Instant::now().checked_sub(Duration::from_secs(60)).expect("System clock trouble"),
                 }),
         }
     }
@@ -292,7 +287,7 @@ impl Default for MomentaryController {
 
 impl MomentaryController {
     pub fn new(
-        double_duration: Duration,
+        _double_duration: Duration,
         long_duration: Duration,
     ) -> MomentaryController {
         MomentaryController {
@@ -304,11 +299,11 @@ impl MomentaryController {
             output_init: [0; OUTPUTS],
             has_long: [false; SWITCHES],
             long: [0; SWITCHES],
-            double_open: double_duration,
+//            double_open: double_duration,
             long_closed: long_duration,
             state: Item::None(
                 NoneState {
-                    stamp: Instant::now().checked_sub(Duration::from_secs(60)).expect("System clock trouble"),
+                    _stamp: Instant::now().checked_sub(Duration::from_secs(60)).expect("System clock trouble"),
                 }),
         }
     }
