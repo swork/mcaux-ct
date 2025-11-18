@@ -4,6 +4,8 @@ use egui::Rect;
 use egui::Sense;
 use egui::Stroke;
 
+use momentary::MomentaryController;
+
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -14,12 +16,17 @@ pub struct TemplateApp {
     #[serde(skip)] // This how you opt-out of serialization of a field
     value: f32,
 
-    switch_isclosed: [bool; 3],
+    switch_isclosed: [bool; 16],
+    output: [u8; 16],
 
     // duty cycles are 0-255 to save silly calcs
     indicator_duty: [u8; 3],
     indicator_color: [Color32; 3],
-    rgb_duty: [u8; 3]
+    rgb_duty: [u8; 3],
+
+    #[serde(skip)] // This how you opt-out of serialization of a field
+    controller: MomentaryController,
+    
 }
 
 impl Default for TemplateApp {
@@ -28,7 +35,8 @@ impl Default for TemplateApp {
             // Example stuff:
             label: "Hello moto world!".to_owned(),
             value: 2.7,
-            switch_isclosed: [false,false, false],
+            switch_isclosed: [false; 16],
+            output: [0; 16],
             indicator_duty: [1,1,1],
             indicator_color: [
                 Color32::from_rgb(255,0,0),
@@ -36,6 +44,7 @@ impl Default for TemplateApp {
                 Color32::from_rgb(0, 0, 255),
             ],
             rgb_duty: [1, 1, 1],
+            controller: Default::default(),
         }
     }
 }
@@ -48,11 +57,19 @@ impl TemplateApp {
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
-        if let Some(storage) = cc.storage {
+        let mut app: TemplateApp = if let Some(storage) = cc.storage {
             eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
         } else {
             Default::default()
-        }
+        };
+
+        let (sw0_idx, out0_idx) = app.controller.add_switch(2);
+        let (sw1_idx, out1_idx) = app.controller.add_switch(2);
+        let (sw2_idx, out2_idx) = app.controller.add_switch(5);
+        let (swL_idx, outL_idx) = app.controller.augment_switch_longpress(sw0_idx, 2);
+        assert!(sw0_idx == 0 && sw1_idx == 1 && sw2_idx == 2);
+
+        app
     }
 }
 
@@ -90,20 +107,6 @@ impl eframe::App for TemplateApp {
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.heading("MCAux CT");
 
-            /*
-            ui.horizontal(|ui| {
-                ui.label("Prove it: ");
-                ui.text_edit_singleline(&mut self.label);
-            });
-
-            ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                self.value += 1.0;
-            }
-
-            ui.separator();
-            */
-
             // TODO rework to _centers
             let switch_radii: f32 = 20.;
             let switch_rects: [Rect; 3] = [
@@ -127,15 +130,18 @@ impl eframe::App for TemplateApp {
                     } else {
                         self.switch_isclosed[i] = true;
                     }
+                    self.output = self.controller.report(self.switch_isclosed);
                 }
             }
 
-            /*
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/main/",
-                "Source code."
-            ));
-            */
+            ui.separator();
+
+            for i in 0..3 {
+                ui.horizontal(|ui| {
+                    ui.label(format!("sw{}: {}", i, self.switch_isclosed[i]));
+                    ui.label(format!("out{}: {}", i, self.output[i]));
+                });
+            }
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 powered_by_egui_and_eframe(ui);

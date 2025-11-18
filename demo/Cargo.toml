@@ -20,10 +20,11 @@ eframe = { version = "0.33.0", default-features = false, features = [
     "wayland",       # To support Linux (and CI)
     "x11",           # To support older Linux distributions (restores one of the default features)
 ] }
-log = "0.4.27"
 
 # You only need serde if you want app persistence:
 serde = { version = "1.0.219", features = ["derive"] }
+momentary = { version = "0.1.0", path = "../momentary" }
+egui_tracing = { version = "0.2.6", features = ["reexport"] }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -33,4 +34,5 @@ env_logger = "0.11.8"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4.50"
 web-sys = "0.3.70"              # to access the DOM (to hide the loading text)
+
 
