@@ -297,6 +297,9 @@ function getArrayI8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getInt8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
+function wasm_bindgen__convert__closures_____invoke__h0d6248cee6444b67(arg0, arg1, arg2) {
+    wasm.wasm_bindgen__convert__closures_____invoke__h0d6248cee6444b67(arg0, arg1, arg2);
+}
 
 function takeFromExternrefTable0(idx) {
     const value = wasm.__wbindgen_externrefs.get(idx);
@@ -312,10 +315,6 @@ function wasm_bindgen__convert__closures_____invoke__h6a998dfe7086df73(arg0, arg
 
 function wasm_bindgen__convert__closures_____invoke__h16f6550ba2bd4ba0(arg0, arg1, arg2) {
     wasm.wasm_bindgen__convert__closures_____invoke__h16f6550ba2bd4ba0(arg0, arg1, arg2);
-}
-
-function wasm_bindgen__convert__closures_____invoke__h0d6248cee6444b67(arg0, arg1, arg2) {
-    wasm.wasm_bindgen__convert__closures_____invoke__h0d6248cee6444b67(arg0, arg1, arg2);
 }
 
 const __wbindgen_enum_ResizeObserverBoxOptions = ["border-box", "content-box", "device-pixel-content-box"];
