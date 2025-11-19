@@ -107,7 +107,6 @@ impl OneState {
             // first handle MULTI. Else:
 
             // No change? Long-press, or do nothing.
-            warn!("OneState report: incoming: {:?}, self.switches: {:?}", incoming, self.switches);
             if incoming == self.switches {
                 // Check for long-press
                 let interval = Instant::now().saturating_duration_since(self.stamp);
@@ -276,7 +275,7 @@ impl Default for MomentaryController {
             has_long: [false; SWITCHES],
             long: [0; SWITCHES],
 //            double_open: Duration::from_millis(500),
-            long_closed: Duration::from_millis(2000),
+            long_closed: Duration::from_millis(1500),
             state: Item::None(
                 NoneState {
                     _stamp: Instant::now().checked_sub(Duration::from_secs(60)).expect("System clock trouble"),
