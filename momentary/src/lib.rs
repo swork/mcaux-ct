@@ -51,39 +51,6 @@ impl NoneState {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn none_from_none() {
-        let mut c: MomentaryController = Default::default();
-        c.add_switch(2);
-        let ins: [bool; SWITCHES] = [false; SWITCHES];
-
-        c.report(ins);
-        assert_eq!(c.output, [0; OUTPUTS]);
-        assert!(match c.state {
-            Item::None(_) => true,
-            _ => false,
-        });
-    }
-
-    #[test]
-    fn one_from_none() {
-        let mut c: MomentaryController = Default::default();
-        c.add_switch(2);
-        let mut ins: [bool; SWITCHES] = [false; SWITCHES];
-        ins[0] = true;
-        c.report(ins);
-        assert!(match c.state {
-            Item::One(_) => true,
-            _ => false,
-        });
-        assert_eq!(c.output, [0; OUTPUTS]);
-    }
-}
-
 
 /// State while one button is held closed briefly.
 #[derive(Clone, Copy)]
@@ -370,5 +337,87 @@ impl MomentaryController {
             Item::Long(_) => "Long",
         }))
     }
+}
+
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn none_from_none() {
+        let mut c: MomentaryController = Default::default();
+        c.add_switch(2);
+        let ins: [bool; SWITCHES] = [false; SWITCHES];
+
+        c.report(ins);
+        assert_eq!(c.output, [0; OUTPUTS]);
+        assert!(match c.state {
+            Item::None(_) => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn one_from_none() {
+        let mut c: MomentaryController = Default::default();
+        c.add_switch(2);
+        let mut ins: [bool; SWITCHES] = [false; SWITCHES];
+        ins[0] = true;
+        c.report(ins);
+        assert!(match c.state {
+            Item::One(_) => true,
+            _ => false,
+        });
+        assert_eq!(c.output, [0; OUTPUTS]);
+    }
+
+    fn state_one_from_scratch() -> (MomentaryController, usize, usize, [bool; SWITCHES], [u8; OUTPUTS], String) {
+        let mut c: MomentaryController = Default::default();
+        let (sw0, out0) = c.add_switch(2);
+        let mut ins: [bool; SWITCHES] = [false; SWITCHES];
+        ins[sw0] = true;
+        let (output, state) = c.report(ins);
+        (c, sw0, out0, ins, output, state)
+    }
+
+    #[test]
+    fn validate_setup_state_one() {
+        let (_c, sw0, out0, ins, output, state) = state_one_from_scratch();
+        assert_eq!(sw0, 0);
+        assert_eq!(out0, 0);
+        assert_eq!(state, "One");
+        assert!(ins[0]);
+        assert_eq!(ins[1..], [false; SWITCHES-1]);
+        assert_eq!(output, [0; OUTPUTS]);
+    }
+
+    #[test]
+    fn one_from_one() {
+        let (mut c, _sw0, _out0, ins, _output, _state) = state_one_from_scratch();
+
+        // repeat same input
+        let (output, state) = c.report(ins);
+
+        assert_eq!(state, "One");
+        assert!(ins[0]);
+        assert_eq!(ins[1..], [false; SWITCHES-1]);
+        assert_eq!(output, [0; OUTPUTS]);
+    }
+
+    #[test]
+    fn none_from_one() {
+        let (mut c, _sw0, out0, mut ins, _output, _state) = state_one_from_scratch();
+
+        // open the switch
+        ins[0] = false;
+        let (output, state) = c.report(ins);
+
+        assert_eq!(state, "None");
+        assert_eq!(output[out0], 1);
+        assert_eq!(c.output[1..], [0; OUTPUTS-1]);
+    }
+
 }
 
