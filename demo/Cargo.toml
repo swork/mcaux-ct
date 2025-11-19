@@ -23,7 +23,7 @@ eframe = { version = "0.33.0", default-features = false, features = [
 # You only need serde if you want app persistence:
 serde = { version = "1.0.219", features = ["derive"] }
 momentary = { version = "0.1.0", path = "../momentary" }
-egui_tracing = { version = "0.2.6", features = ["reexport"] }
+log = "0.4.28"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use egui::Color32;
 use egui::Pos2;
 use egui::Rect;
@@ -17,6 +19,7 @@ pub struct TemplateApp {
 
     switch_isclosed: [bool; 16],
     output: [u8; 16],
+    switch_state_name: String,
 
     // duty cycles are 0-255 to save silly calcs
     indicator_duty: [u8; 3],
@@ -25,7 +28,7 @@ pub struct TemplateApp {
 
     #[serde(skip)] // This how you opt-out of serialization of a field
     controller: MomentaryController,
-    
+
 }
 
 impl Default for TemplateApp {
@@ -35,6 +38,7 @@ impl Default for TemplateApp {
             label: "Hello moto world!".to_owned(),
             value: 2.7,
             switch_isclosed: [false; 16],
+            switch_state_name: String::new(),
             output: [0; 16],
             indicator_duty: [1,1,1],
             indicator_color: [
@@ -129,10 +133,16 @@ impl eframe::App for TemplateApp {
                     } else {
                         self.switch_isclosed[i] = true;
                     }
-                    self.output = self.controller.report(self.switch_isclosed);
                 }
             }
+            (self.output, self.switch_state_name) = self.controller.report(self.switch_isclosed);
+            ctx.request_repaint_after(Duration::from_millis(99)); // roughly 10fps
 
+            ui.separator();
+            ui.label(format!("switch state: {} switches: {:?} outputs: {:?}",
+                 self.switch_state_name,
+                  self.switch_isclosed,
+                  self.output));
             ui.separator();
 
             for i in 0..3 {

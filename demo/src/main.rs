@@ -1,18 +1,11 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use egui_tracing::tracing_subscriber;
-
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
-    //env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
-
-    use egui_tracing::tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
-    let collector = egui_tracing::EventCollector::default();
-    tracing_subscriber::registry()
-        .with(collector.clone())
-        .init();
+    env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+    log::info!("Starting up MCAux CT...");
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

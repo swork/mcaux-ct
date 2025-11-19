@@ -1,7 +1,7 @@
 use core::panic;
 use std::time::{Duration, Instant};
 
-use tracing::warn;
+use log::warn;
 
 const SWITCHES: usize = 16;
 const OUTPUTS: usize = 16;
@@ -195,7 +195,7 @@ impl LongState {
         &self,
         incoming: [bool; SWITCHES],
     ) -> Item {
-        if incoming.iter().count() == 0 {
+        if incoming.iter().find(|x| **x).into_iter().count() == 0 {
             // End the long-press state, during which no other switch changes have any effect.
             Item::None(Default::default())
         } else {
@@ -341,7 +341,7 @@ impl MomentaryController {
     pub fn report(
         &mut self,
         incoming: [bool; SWITCHES],
-    ) -> [u8; OUTPUTS] {
+    ) -> ([u8; OUTPUTS], String) {
         if ! self.started {
             self.output = self.output_init;
             self.started = true;
@@ -365,7 +365,11 @@ impl MomentaryController {
             }
             */
         };
-        self.output.clone()
+        (self.output.clone(), format!("{}", match &self.state {
+            Item::None(_) => "None",
+            Item::One(_) => "One",
+            Item::Long(_) => "Long",
+        }))
     }
 }
 
