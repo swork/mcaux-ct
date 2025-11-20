@@ -11,15 +11,11 @@ const OUTPUTS: usize = 16;
 
 /// State when no input switches are closed; also, with recent:None, the initial state.
 #[derive(Clone, Copy)]
-struct NoneState {
-    _stamp: Instant,
-}
+struct NoneState {}
 
 impl Default for NoneState {
     fn default() -> Self {
-        NoneState {
-            _stamp: Instant::now(),
-        }
+        NoneState {}
     }
 }
 
@@ -136,10 +132,7 @@ impl OneState {
                 if parent.output[first_idx] >= parent.output_cycles[first_idx] {
                     parent.output[first_idx] = 0
                 }
-                return Item::None(
-                    NoneState {
-                        _stamp: Instant::now(),
-                    });
+                return Item::None(NoneState {});
             } else {
                 panic!("Logic trouble, no-switches-before case should have been caught above");
             }
@@ -246,10 +239,7 @@ impl Default for MomentaryController {
             long: [0; SWITCHES],
 //            double_open: Duration::from_millis(500),
             long_closed: Duration::from_millis(1500),
-            state: Item::None(
-                NoneState {
-                    _stamp: Instant::now().checked_sub(Duration::from_secs(60)).expect("System clock trouble"),
-                }),
+            state: Item::None(NoneState {}),
         }
     }
 }
@@ -270,10 +260,7 @@ impl MomentaryController {
             long: [0; SWITCHES],
 //            double_open: double_duration,
             long_closed: long_duration,
-            state: Item::None(
-                NoneState {
-                    _stamp: Instant::now().checked_sub(Duration::from_secs(60)).expect("System clock trouble"),
-                }),
+            state: Item::None(NoneState {}),
         }
     }
 
