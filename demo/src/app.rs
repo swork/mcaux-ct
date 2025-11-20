@@ -156,12 +156,10 @@ impl eframe::App for TemplateApp {
                 self.rgb_duty[0], self.rgb_duty[1], self.rgb_duty[2]
             );
 
-            for i in 0..switch_rects.len() {
+            for (i, item) in switch_rects.iter().enumerate() {
                 let circle_center = Pos2 {
-                    x: ((switch_rects[i].max.x - switch_rects[i].min.x) / 2.)
-                        + switch_rects[i].min.x,
-                    y: ((switch_rects[i].max.y - switch_rects[i].min.y) / 2.)
-                        + switch_rects[i].min.y,
+                    x: ((item.max.x - item.min.x) / 2.) + item.min.x,
+                    y: ((item.max.y - item.min.y) / 2.) + item.min.y,
                 };
                 let circle_text = if self.switch_isclosed[i] {
                     "closed"
@@ -177,17 +175,13 @@ impl eframe::App for TemplateApp {
                         color: color_for_switch_and_duty(i, self.indicator_duty[i]),
                     },
                 );
-                ui.put(switch_rects[i], egui::Label::new(circle_text));
+                ui.put(*item, egui::Label::new(circle_text));
                 let id_text = format!("SW{i}_representation");
                 if ui
-                    .interact(switch_rects[i], egui::Id::new(id_text), Sense::click())
+                    .interact(*item, egui::Id::new(id_text), Sense::click())
                     .clicked()
                 {
-                    if self.switch_isclosed[i] {
-                        self.switch_isclosed[i] = false;
-                    } else {
-                        self.switch_isclosed[i] = true;
-                    }
+                    self.switch_isclosed[i] = !self.switch_isclosed[i];
                 }
             }
             (self.output, self.switch_state_name) = self.controller.report(self.switch_isclosed);

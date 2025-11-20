@@ -21,7 +21,7 @@ impl NoneState {
             .find(|&(_, &x)| x)
             .map(|(index, _)| index)
         {
-            if incoming[first_idx + 1..].iter().find(|&&x| x).is_some() {
+            if incoming[first_idx + 1..].iter().any(|&x| x) {
                 // multiple switches closed at the same time, unlikely in hardware but let's be robust.
                 // Note the possibility that this event could be within the double-click time of one
                 // switch or the other, making it ambiguous - did they mean to press both switches, or a double-click of that
@@ -80,7 +80,7 @@ impl OneState {
             } else {
                 // Switches changed, and at least one is still down.
 
-                if incoming[first_idx + 1..].iter().find(|&&x| x).is_some() {
+                if incoming[first_idx + 1..].iter().any(|&x| x) {
                     // multiple switches closed at the same time, unlikely in hardware but let's be robust.
                     // Note the possibility that this event could be within the double-click time of one
                     // switch or the other, making it ambiguous - did they mean to press both switches, or a double-click of that
@@ -110,7 +110,7 @@ impl OneState {
             {
                 // Check our work: be sure there wasn't a second switch down previously,
                 // with both released at the same moment
-                if self.switches[first_idx + 1..].iter().find(|&&x| x).is_some() {
+                if self.switches[first_idx + 1..].iter().any(|&x| x) {
                     panic!("Logic problem: in state One we found 2 or more switches closed.");
                 }
 
