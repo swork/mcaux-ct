@@ -291,10 +291,11 @@ impl MomentaryController {
         (
             self.output,
             match &self.state {
-                    Item::None(_) => "None",
-                    Item::One(_) => "One",
-                    Item::Long(_) => "Long",
-            }.to_string()
+                Item::None(_) => "None",
+                Item::One(_) => "One",
+                Item::Long(_) => "Long",
+            }
+            .to_string(),
         )
     }
 }
