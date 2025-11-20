@@ -312,10 +312,7 @@ mod test {
 
         c.report(ins);
         assert_eq!(c.output, [0; OUTPUTS]);
-        assert!(match c.state {
-            Item::None(_) => true,
-            _ => false,
-        });
+        matches!(c.state, Item::None(_));
     }
 
     #[test]
@@ -325,10 +322,7 @@ mod test {
         let mut ins: [bool; SWITCHES] = [false; SWITCHES];
         ins[0] = true;
         c.report(ins);
-        assert!(match c.state {
-            Item::One(_) => true,
-            _ => false,
-        });
+        matches!(c.state, Item::One(_));
         assert_eq!(c.output, [0; OUTPUTS]);
     }
 
