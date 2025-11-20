@@ -10,14 +10,8 @@ const SWITCHES: usize = 16;
 const OUTPUTS: usize = 16;
 
 /// State when no input switches are closed; also, with recent:None, the initial state.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct NoneState {}
-
-impl Default for NoneState {
-    fn default() -> Self {
-        NoneState {}
-    }
-}
 
 impl NoneState {
     fn report(&self, incoming: [bool; 16]) -> Item {
@@ -27,7 +21,7 @@ impl NoneState {
             .find(|&(_, &x)| x)
             .map(|(index, _)| index)
         {
-            if let Some(_) = incoming[first_idx + 1..].iter().find(|&&x| x) {
+            if incoming[first_idx + 1..].iter().find(|&&x| x).is_some() {
                 // multiple switches closed at the same time, unlikely in hardware but let's be robust.
                 // Note the possibility that this event could be within the double-click time of one
                 // switch or the other, making it ambiguous - did they mean to press both switches, or a double-click of that
@@ -42,7 +36,7 @@ impl NoneState {
             });
         }
 
-        Item::None(self.clone())
+        Item::None(*self)
     }
 }
 
@@ -78,15 +72,15 @@ impl OneState {
                     if parent.output[output_idx] >= parent.output_cycles[output_idx] {
                         parent.output[output_idx] = 0;
                     }
-                    return Item::Long(LongState {});
+                    Item::Long(Default::default())
                 } else {
                     // do nothing, keep counting time.
-                    return Item::One(self.clone());
+                    Item::One(*self)
                 }
             } else {
                 // Switches changed, and at least one is still down.
 
-                if let Some(_) = incoming[first_idx + 1..].iter().find(|&&x| x == true) {
+                if incoming[first_idx + 1..].iter().find(|&&x| x).is_some() {
                     // multiple switches closed at the same time, unlikely in hardware but let's be robust.
                     // Note the possibility that this event could be within the double-click time of one
                     // switch or the other, making it ambiguous - did they mean to press both switches, or a double-click of that
@@ -116,7 +110,7 @@ impl OneState {
             {
                 // Check our work: be sure there wasn't a second switch down previously,
                 // with both released at the same moment
-                if let Some(_) = self.switches[first_idx + 1..].iter().find(|&&x| x) {
+                if self.switches[first_idx + 1..].iter().find(|&&x| x).is_some() {
                     panic!("Logic problem: in state One we found 2 or more switches closed.");
                 }
 
@@ -125,7 +119,7 @@ impl OneState {
                 if parent.output[first_idx] >= parent.output_cycles[first_idx] {
                     parent.output[first_idx] = 0
                 }
-                return Item::None(NoneState {});
+                Item::None(NoneState {})
             } else {
                 panic!("Logic trouble, no-switches-before case should have been caught above");
             }
@@ -134,14 +128,8 @@ impl OneState {
 }
 
 /// State when one switch has been held closed longer than the long-press duration. This state holds until that switch is opened.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct LongState {}
-
-impl Default for LongState {
-    fn default() -> Self {
-        LongState {}
-    }
-}
 
 impl LongState {
     fn report(&self, incoming: [bool; SWITCHES]) -> Item {
@@ -150,7 +138,7 @@ impl LongState {
             Item::None(Default::default())
         } else {
             // Any other change, do nothing.
-            Item::Long(self.clone())
+            Item::Long(*self)
         }
     }
 }
@@ -301,15 +289,12 @@ impl MomentaryController {
                                                          */
         };
         (
-            self.output.clone(),
-            format!(
-                "{}",
-                match &self.state {
+            self.output,
+            match &self.state {
                     Item::None(_) => "None",
                     Item::One(_) => "One",
                     Item::Long(_) => "Long",
-                }
-            ),
+            }.to_string()
         )
     }
 }
