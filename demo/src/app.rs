@@ -1,3 +1,4 @@
+use momentary::SwitchState;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 #[cfg(target_arch = "wasm32")]
@@ -26,7 +27,7 @@ pub struct TemplateApp {
     #[serde(skip)]
     output: [u8; 16],
     #[serde(skip)]
-    switch_state_name: String,
+    switch_state: SwitchState,
 
     // duty cycles are 0-255 to save silly calcs
     #[serde(skip)]
@@ -45,7 +46,7 @@ impl Default for TemplateApp {
             label: "Hello moto world!".to_owned(),
             value: 2.7,
             switch_isclosed: [false; 16],
-            switch_state_name: String::new(),
+            switch_state: SwitchState::None,
             output: [0; 16],
             indicator_duty: [128, 128, 128],
             rgb_duty: [90, 100, 110],
@@ -184,15 +185,12 @@ impl eframe::App for TemplateApp {
                     self.switch_isclosed[i] = !self.switch_isclosed[i];
                 }
             }
-            (self.output, self.switch_state_name) = self.controller.report(self.switch_isclosed);
+            (self.output, self.switch_state) = self.controller.report(self.switch_isclosed);
             ctx.request_repaint_after(Duration::from_millis(99)); // roughly 10fps
 
             // Debug info
             ui.separator();
-            ui.label(format!(
-                "switch controller state: {}",
-                self.switch_state_name
-            ));
+            ui.label(format!("switch controller state: {:?}", self.switch_state));
             ui.label(format!(
                 "switches: {:?}",
                 self.switch_isclosed[0..=2]

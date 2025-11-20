@@ -9,18 +9,78 @@ use web_time::{Duration, Instant};
 const SWITCHES: usize = 16;
 const OUTPUTS: usize = 16;
 
-/// State when no input switches are closed; also, with recent:None, the initial state.
-#[derive(Clone, Copy, Default)]
-struct NoneState {}
+fn report_from_none(incoming: [bool; 16]) -> (SwitchState, Option<StateDetail>) {
+    if let Some(first_idx) = incoming
+        .iter()
+        .enumerate()
+        .find(|&(_, &x)| x)
+        .map(|(index, _)| index)
+    {
+        if incoming[first_idx + 1..].iter().any(|&x| x) {
+            // multiple switches closed at the same time, unlikely in hardware but let's be robust.
+            // Note the possibility that this event could be within the double-click time of one
+            // switch or the other, making it ambiguous - did they mean to press both switches, or a double-click of that
+            // switch, or a multi-click following a single click? We simply assume the latter here.
+            //
+            panic!("MULTI not yet implemented");
+        }
 
-impl NoneState {
-    fn report(&self, incoming: [bool; 16]) -> Item {
-        if let Some(first_idx) = incoming
-            .iter()
-            .enumerate()
-            .find(|&(_, &x)| x)
-            .map(|(index, _)| index)
-        {
+        return (
+            SwitchState::One,
+            Some(StateDetail {
+                stamp: Instant::now(),
+                switches: incoming,
+            }),
+        );
+    }
+
+    (SwitchState::None, None)
+}
+
+/// State while one button is held closed briefly.
+#[derive(Clone, Copy)]
+struct StateDetail {
+    stamp: Instant,
+    switches: [bool; SWITCHES],
+}
+
+fn report_from_one(
+    incoming: [bool; SWITCHES],
+    parent: &mut MomentaryController,
+) -> (SwitchState, Option<StateDetail>) {
+    let deets_before = parent.state_detail.unwrap();
+
+    if let Some(first_idx) = incoming
+        .iter()
+        .enumerate()
+        .find(|&(_, &x)| x)
+        .map(|(index, _)| index)
+    {
+        // first handle MULTI. Else:
+
+        // No change? Long-press, or do nothing.
+        if incoming == deets_before.switches {
+            // Check for long-press
+            let interval = Instant::now().saturating_duration_since(deets_before.stamp);
+            if parent.has_long[first_idx] && interval > parent.long_closed {
+                warn!(
+                    "Long-press detected on switch {}, duration was {:?}",
+                    first_idx, interval
+                );
+                // This is a long-press.
+                let output_idx: usize = parent.long[first_idx];
+                parent.output[output_idx] += 1;
+                if parent.output[output_idx] >= parent.output_cycles[output_idx] {
+                    parent.output[output_idx] = 0;
+                }
+                (SwitchState::Long, None)
+            } else {
+                // do nothing, keep counting time.
+                (SwitchState::One, parent.state_detail)
+            }
+        } else {
+            // Switches changed, and at least one is still down.
+
             if incoming[first_idx + 1..].iter().any(|&x| x) {
                 // multiple switches closed at the same time, unlikely in hardware but let's be robust.
                 // Note the possibility that this event could be within the double-click time of one
@@ -28,118 +88,52 @@ impl NoneState {
                 // switch, or a multi-click following a single click? We simply assume the latter here.
                 //
                 panic!("MULTI not yet implemented");
+            } else {
+                // They report one switch is closed. Was it reported closed already?
+                if deets_before.switches[first_idx] {
+                    panic!("Trouble: should have already caught the no-change case");
+                }
+
+                // Yikes, they released the switch but a different switch is down. Treat this like a second report
+                panic!("Simultaneous release and press of two switches not yet implemented");
             }
-
-            return Item::One(OneState {
-                stamp: Instant::now(),
-                switches: incoming,
-            });
         }
-
-        Item::None(*self)
-    }
-}
-
-/// State while one button is held closed briefly.
-#[derive(Clone, Copy)]
-struct OneState {
-    stamp: Instant,
-    switches: [bool; SWITCHES],
-}
-
-impl OneState {
-    fn report(&self, incoming: [bool; SWITCHES], parent: &mut MomentaryController) -> Item {
-        if let Some(first_idx) = incoming
+    } else {
+        // They released the only switch that was down, before the long-press timer expired.
+        // (Learning this requires the caller to report() repeatedly with no-change reports
+        //  while switches are closed.)
+        if let Some(first_idx) = deets_before
+            .switches
             .iter()
             .enumerate()
             .find(|&(_, &x)| x)
             .map(|(index, _)| index)
         {
-            // first handle MULTI. Else:
-
-            // No change? Long-press, or do nothing.
-            if incoming == self.switches {
-                // Check for long-press
-                let interval = Instant::now().saturating_duration_since(self.stamp);
-                if parent.has_long[first_idx] && interval > parent.long_closed {
-                    warn!(
-                        "Long-press detected on switch {}, duration was {:?}",
-                        first_idx, interval
-                    );
-                    // This is a long-press.
-                    let output_idx: usize = parent.long[first_idx];
-                    parent.output[output_idx] += 1;
-                    if parent.output[output_idx] >= parent.output_cycles[output_idx] {
-                        parent.output[output_idx] = 0;
-                    }
-                    Item::Long(Default::default())
-                } else {
-                    // do nothing, keep counting time.
-                    Item::One(*self)
-                }
-            } else {
-                // Switches changed, and at least one is still down.
-
-                if incoming[first_idx + 1..].iter().any(|&x| x) {
-                    // multiple switches closed at the same time, unlikely in hardware but let's be robust.
-                    // Note the possibility that this event could be within the double-click time of one
-                    // switch or the other, making it ambiguous - did they mean to press both switches, or a double-click of that
-                    // switch, or a multi-click following a single click? We simply assume the latter here.
-                    //
-                    panic!("MULTI not yet implemented");
-                } else {
-                    // They report one switch is closed. Was it reported closed already?
-                    if self.switches[first_idx] {
-                        panic!("Trouble: should have already caught the no-change case");
-                    }
-
-                    // Yikes, they released the switch but a different switch is down. Treat this like a second report
-                    panic!("Simultaneous release and press of two switches not yet implemented");
-                }
+            // Check our work: be sure there wasn't a second switch down previously,
+            // with both released at the same moment
+            if deets_before.switches[first_idx + 1..].iter().any(|&x| x) {
+                panic!("Logic problem: in state One we found 2 or more switches closed.");
             }
+
+            // Toggle the output.
+            parent.output[first_idx] += 1;
+            if parent.output[first_idx] >= parent.output_cycles[first_idx] {
+                parent.output[first_idx] = 0
+            }
+            (SwitchState::None, None)
         } else {
-            // They released the only switch that was down, before the long-press timer expired.
-            // (Learning this requires the caller to report() repeatedly with no-change reports
-            //  while switches are closed.)
-            if let Some(first_idx) = self
-                .switches
-                .iter()
-                .enumerate()
-                .find(|&(_, &x)| x)
-                .map(|(index, _)| index)
-            {
-                // Check our work: be sure there wasn't a second switch down previously,
-                // with both released at the same moment
-                if self.switches[first_idx + 1..].iter().any(|&x| x) {
-                    panic!("Logic problem: in state One we found 2 or more switches closed.");
-                }
-
-                // Toggle the output.
-                parent.output[first_idx] += 1;
-                if parent.output[first_idx] >= parent.output_cycles[first_idx] {
-                    parent.output[first_idx] = 0
-                }
-                Item::None(NoneState {})
-            } else {
-                panic!("Logic trouble, no-switches-before case should have been caught above");
-            }
+            panic!("Logic trouble, no-switches-before case should have been caught above");
         }
     }
 }
 
-/// State when one switch has been held closed longer than the long-press duration. This state holds until that switch is opened.
-#[derive(Clone, Copy, Default)]
-struct LongState {}
-
-impl LongState {
-    fn report(&self, incoming: [bool; SWITCHES]) -> Item {
-        if incoming.iter().find(|x| **x).into_iter().count() == 0 {
-            // End the long-press state, during which no other switch changes have any effect.
-            Item::None(Default::default())
-        } else {
-            // Any other change, do nothing.
-            Item::Long(*self)
-        }
+fn report_from_long(incoming: [bool; SWITCHES]) -> (SwitchState, Option<StateDetail>) {
+    if incoming.iter().find(|x| **x).into_iter().count() == 0 {
+        // End the long-press state, during which no other switch changes have any effect.
+        (SwitchState::None, None)
+    } else {
+        // Any other change, do nothing.
+        (SwitchState::Long, None)
     }
 }
 
@@ -157,10 +151,11 @@ struct MultiState {
 }
 */
 
-enum Item {
-    None(NoneState),
-    One(OneState),
-    Long(LongState),
+#[derive(Clone, Copy, Debug)]
+pub enum SwitchState {
+    None,
+    One,
+    Long,
     /*
     Double(DoubleState),
     Multi(MultiState),
@@ -172,7 +167,10 @@ pub struct MomentaryController {
     started: bool,
 
     /// Current reported state of the system, None at start
-    state: Item,
+    state: SwitchState,
+
+    /// Info like timing needed in various states
+    state_detail: Option<StateDetail>,
 
     /// How many input momentary-contacts?
     switches: usize,
@@ -215,7 +213,8 @@ impl Default for MomentaryController {
             long: [0; SWITCHES],
             //            double_open: Duration::from_millis(500),
             long_closed: Duration::from_millis(1500),
-            state: Item::None(NoneState {}),
+            state: SwitchState::None,
+            state_detail: None,
         }
     }
 }
@@ -233,7 +232,8 @@ impl MomentaryController {
             long: [0; SWITCHES],
             //            double_open: double_duration,
             long_closed: long_duration,
-            state: Item::None(NoneState {}),
+            state: SwitchState::None,
+            state_detail: None,
         }
     }
 
@@ -271,32 +271,24 @@ impl MomentaryController {
         (switch_idx, output_idx)
     }
 
-    pub fn report(&mut self, incoming: [bool; SWITCHES]) -> ([u8; OUTPUTS], String) {
+    pub fn report(&mut self, incoming: [bool; SWITCHES]) -> ([u8; OUTPUTS], SwitchState) {
         if !self.started {
             self.output = self.output_init;
             self.started = true;
         }
-        self.state = match self.state {
-            Item::None(deets) => deets.report(incoming),
-            Item::One(deets) => deets.report(incoming, self),
-            Item::Long(deets) => deets.report(incoming), /*
-                                                         Item::Multi(..) => {
-                                                             panic!("not implemented")
-                                                         }
-                                                         Item::Double(..) => {
-                                                             panic!("not implemented")
-                                                         }
-                                                         */
+        (self.state, self.state_detail) = match self.state {
+            SwitchState::None => report_from_none(incoming),
+            SwitchState::One => report_from_one(incoming, self),
+            SwitchState::Long => report_from_long(incoming), /*
+                                                             SwitchState::Multi(..) => {
+                                                                 panic!("not implemented")
+                                                             }
+                                                             SwitchState::Double(..) => {
+                                                                 panic!("not implemented")
+                                                             }
+                                                             */
         };
-        (
-            self.output,
-            match &self.state {
-                Item::None(_) => "None",
-                Item::One(_) => "One",
-                Item::Long(_) => "Long",
-            }
-            .to_string(),
-        )
+        (self.output, self.state)
     }
 }
 
@@ -312,7 +304,7 @@ mod test {
 
         c.report(ins);
         assert_eq!(c.output, [0; OUTPUTS]);
-        matches!(c.state, Item::None(_));
+        matches!(c.state, SwitchState::None);
     }
 
     #[test]
@@ -322,7 +314,7 @@ mod test {
         let mut ins: [bool; SWITCHES] = [false; SWITCHES];
         ins[0] = true;
         c.report(ins);
-        matches!(c.state, Item::One(_));
+        matches!(c.state, SwitchState::One);
         assert_eq!(c.output, [0; OUTPUTS]);
     }
 
@@ -332,7 +324,7 @@ mod test {
         usize,
         [bool; SWITCHES],
         [u8; OUTPUTS],
-        String,
+        SwitchState,
     ) {
         let mut c: MomentaryController = Default::default();
         let (sw0, out0) = c.add_switch(2);
@@ -347,7 +339,7 @@ mod test {
         let (_c, sw0, out0, ins, output, state) = state_one_from_scratch();
         assert_eq!(sw0, 0);
         assert_eq!(out0, 0);
-        assert_eq!(state, "One");
+        matches!(state, SwitchState::One);
         assert!(ins[0]);
         assert_eq!(ins[1..], [false; SWITCHES - 1]);
         assert_eq!(output, [0; OUTPUTS]);
@@ -360,7 +352,7 @@ mod test {
         // repeat same input
         let (output, state) = c.report(ins);
 
-        assert_eq!(state, "One");
+        matches!(state, SwitchState::One);
         assert!(ins[0]);
         assert_eq!(ins[1..], [false; SWITCHES - 1]);
         assert_eq!(output, [0; OUTPUTS]);
@@ -374,7 +366,7 @@ mod test {
         ins[0] = false;
         let (output, state) = c.report(ins);
 
-        assert_eq!(state, "None");
+        matches!(state, SwitchState::None);
         assert_eq!(output[out0], 1);
         assert_eq!(c.output[1..], [0; OUTPUTS - 1]);
     }
