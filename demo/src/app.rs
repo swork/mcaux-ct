@@ -36,7 +36,6 @@ pub struct TemplateApp {
 
     #[serde(skip)] // This how you opt-out of serialization of a field
     controller: MomentaryController,
-
 }
 
 impl Default for TemplateApp {
@@ -48,8 +47,8 @@ impl Default for TemplateApp {
             switch_isclosed: [false; 16],
             switch_state_name: String::new(),
             output: [0; 16],
-            indicator_duty: [128,128,128],
-            rgb_duty: [90,100,110],
+            indicator_duty: [128, 128, 128],
+            rgb_duty: [90, 100, 110],
             controller: Default::default(),
         }
     }
@@ -72,7 +71,7 @@ impl TemplateApp {
         let (sw0_idx, _out0_idx) = app.controller.add_switch(2);
         let (sw1_idx, _out1_idx) = app.controller.add_switch(2);
         let (sw2_idx, _out2_idx) = app.controller.add_switch(5);
-        let (_sw_l_idx,_out_l_idx) = app.controller.augment_switch_longpress(sw0_idx, 2);
+        let (_sw_l_idx, _out_l_idx) = app.controller.augment_switch_longpress(sw0_idx, 2);
         assert!(sw0_idx == 0 && sw1_idx == 1 && sw2_idx == 2);
 
         app
@@ -91,7 +90,7 @@ fn color_for_switch_and_duty(switch_idx: usize, duty: u8) -> Color32 {
 impl eframe::App for TemplateApp {
     /// Called by the framework to save state before shutdown.
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
-//        eframe::set_value(storage, eframe::APP_KEY, self);
+        //        eframe::set_value(storage, eframe::APP_KEY, self);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
@@ -125,29 +124,65 @@ impl eframe::App for TemplateApp {
             // TODO rework to _centers
             let switch_radii: f32 = 20.;
             let switch_rects: [Rect; 3] = [
-                Rect { min: Pos2{x: 50., y: 80.}, max: Pos2{x: 50. + switch_radii*2., y: 80. + switch_radii*2.}},
-                Rect { min: Pos2{x: 40., y: 145.}, max: Pos2{x: 80., y: 185.}},
-                Rect { min: Pos2{x: 120., y: 145.}, max: Pos2{x: 160., y: 185.}},
+                Rect {
+                    min: Pos2 { x: 50., y: 80. },
+                    max: Pos2 {
+                        x: 50. + switch_radii * 2.,
+                        y: 80. + switch_radii * 2.,
+                    },
+                },
+                Rect {
+                    min: Pos2 { x: 40., y: 145. },
+                    max: Pos2 { x: 80., y: 185. },
+                },
+                Rect {
+                    min: Pos2 { x: 120., y: 145. },
+                    max: Pos2 { x: 160., y: 185. },
+                },
             ];
 
-            let indicator_center = Pos2{x:142., y:100.};
+            let indicator_center = Pos2 { x: 142., y: 100. };
             ui.painter().circle(
                 indicator_center,
-                10., 
-                Color32::from_rgb(self.rgb_duty[0], self.rgb_duty[1], self.rgb_duty[2]), 
-                Stroke { width: 2., color: Color32::BLACK,});
-            info!("indicator rgb: {},{},{}", self.rgb_duty[0], self.rgb_duty[1], self.rgb_duty[2]);
+                10.,
+                Color32::from_rgb(self.rgb_duty[0], self.rgb_duty[1], self.rgb_duty[2]),
+                Stroke {
+                    width: 2.,
+                    color: Color32::BLACK,
+                },
+            );
+            info!(
+                "indicator rgb: {},{},{}",
+                self.rgb_duty[0], self.rgb_duty[1], self.rgb_duty[2]
+            );
 
             for i in 0..switch_rects.len() {
-                let circle_center = Pos2{
-                    x: ((switch_rects[i].max.x-switch_rects[i].min.x)/2.)+switch_rects[i].min.x,
-                    y: ((switch_rects[i].max.y-switch_rects[i].min.y)/2.)+switch_rects[i].min.y,
-                };                
-                let circle_text = if self.switch_isclosed[i] {"closed"} else {"open"};
-                ui.painter().circle(circle_center, 20., Color32::from_rgb(255, 255, 255), Stroke { width: 4., color: color_for_switch_and_duty(i, self.indicator_duty[i])});
+                let circle_center = Pos2 {
+                    x: ((switch_rects[i].max.x - switch_rects[i].min.x) / 2.)
+                        + switch_rects[i].min.x,
+                    y: ((switch_rects[i].max.y - switch_rects[i].min.y) / 2.)
+                        + switch_rects[i].min.y,
+                };
+                let circle_text = if self.switch_isclosed[i] {
+                    "closed"
+                } else {
+                    "open"
+                };
+                ui.painter().circle(
+                    circle_center,
+                    20.,
+                    Color32::from_rgb(255, 255, 255),
+                    Stroke {
+                        width: 4.,
+                        color: color_for_switch_and_duty(i, self.indicator_duty[i]),
+                    },
+                );
                 ui.put(switch_rects[i], egui::Label::new(circle_text));
                 let id_text = format!("SW{i}_representation");
-                if ui.interact(switch_rects[i], egui::Id::new(id_text), Sense::click()).clicked() {
+                if ui
+                    .interact(switch_rects[i], egui::Id::new(id_text), Sense::click())
+                    .clicked()
+                {
                     if self.switch_isclosed[i] {
                         self.switch_isclosed[i] = false;
                     } else {
@@ -160,9 +195,17 @@ impl eframe::App for TemplateApp {
 
             // Debug info
             ui.separator();
-            ui.label(format!("switch controller state: {}", self.switch_state_name));
-            ui.label(format!("switches: {:?}",
-                self.switch_isclosed[0..=2].iter().map(|x| if *x {1} else {0}).collect::<Vec<u8>>()));
+            ui.label(format!(
+                "switch controller state: {}",
+                self.switch_state_name
+            ));
+            ui.label(format!(
+                "switches: {:?}",
+                self.switch_isclosed[0..=2]
+                    .iter()
+                    .map(|x| if *x { 1 } else { 0 })
+                    .collect::<Vec<u8>>()
+            ));
             ui.label(format!("outputs: {:?}", &self.output[0..=3]));
             ui.separator();
 
@@ -178,7 +221,6 @@ impl eframe::App for TemplateApp {
                 egui::warn_if_debug_build(ui);
             });
         });
-
     }
 }
 
