@@ -3,7 +3,8 @@ resolver = "3"
 members = [
     "demo",
     "momentary",
-    "mcaux-datalogger"
+    "mcaux-datalogger",
+    "mcaux-indicators",
 ]
 
 [profile.release]

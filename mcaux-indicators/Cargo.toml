@@ -1,0 +1,11 @@
+[package]
+name = "mcaux-indicators"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+log = "0.4.28"
+momentary = { version = "0.1.0", path = "../momentary" }
+
+[features]
+async = []

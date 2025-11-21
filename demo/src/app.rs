@@ -11,6 +11,7 @@ use egui::Sense;
 use egui::Stroke;
 use log::info;
 
+use mcaux_indicators::IndicatorController;
 use momentary::MomentaryController;
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -37,6 +38,9 @@ pub struct TemplateApp {
 
     #[serde(skip)] // This how you opt-out of serialization of a field
     controller: MomentaryController,
+
+    #[serde(skip)]
+    indicators: IndicatorController, // duty cycles for all indicators
 }
 
 impl Default for TemplateApp {
@@ -51,6 +55,7 @@ impl Default for TemplateApp {
             indicator_duty: [128, 128, 128],
             rgb_duty: [90, 100, 110],
             controller: Default::default(),
+            indicators: Default::default(),
         }
     }
 }
@@ -79,7 +84,7 @@ impl TemplateApp {
     }
 }
 
-fn color_for_switch_and_duty(switch_idx: usize, duty: u8) -> Color32 {
+fn screen_color_for_switch_and_duty(switch_idx: usize, duty: u8) -> Color32 {
     match switch_idx {
         0 => Color32::from_rgb(duty, 0, 0),
         1 => Color32::from_rgb(0, 0, duty),
@@ -98,6 +103,27 @@ impl eframe::App for TemplateApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
         // For inspiration and more examples, go to https://emilk.github.io/egui
+
+        [
+            self.indicator_duty[0],
+            self.indicator_duty[1],
+            self.indicator_duty[2],
+            self.rgb_duty[0],
+            self.rgb_duty[1],
+            self.rgb_duty[2],
+        ] = self.indicators.get_duty_cycles(
+            [
+                self.switch_isclosed[0],
+                self.switch_isclosed[1],
+                self.switch_isclosed[2],
+            ],
+            [
+                self.output[0],
+                self.output[1],
+                self.output[2],
+                self.output[3],
+            ],
+        );
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
@@ -173,7 +199,7 @@ impl eframe::App for TemplateApp {
                     Color32::from_rgb(255, 255, 255),
                     Stroke {
                         width: 4.,
-                        color: color_for_switch_and_duty(i, self.indicator_duty[i]),
+                        color: screen_color_for_switch_and_duty(i, self.indicator_duty[i]),
                     },
                 );
                 ui.put(*item, egui::Label::new(circle_text));
