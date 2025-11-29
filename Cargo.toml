@@ -3,6 +3,7 @@ members = [
     "demo",
     "mcaux-datalogger",
     "mcaux-indicators",
+    "mcaux-rp2040",
     "momentary",
 ]
 resolver = "3"
