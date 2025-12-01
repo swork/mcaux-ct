@@ -12,7 +12,7 @@ use egui::Stroke;
 use log::info;
 
 use mcaux_indicators::IndicatorController;
-use momentary::MomentaryController;
+use momentary::{MomentaryController, SWITCHES_MAX, OUTPUTS_MAX};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -24,13 +24,13 @@ pub struct TemplateApp {
     value: f32,
 
     #[serde(skip)]
-    switch_isclosed: [bool; 16],
+    switch_isclosed: [bool; SWITCHES_MAX],
     #[serde(skip)]
-    output: [u8; 16],
+    output: [u8; OUTPUTS_MAX],
     #[serde(skip)]
     switch_state: SwitchState,
 
-    // duty cycles are 0-255 to save silly calcs
+    // duty cycles are 0-100 inclusive, matching embassy_rp API
     #[serde(skip)]
     indicator_duty: [u8; 3],
     #[serde(skip)]
@@ -49,11 +49,13 @@ impl Default for TemplateApp {
             // Example stuff:
             label: "Hello moto world!".to_owned(),
             value: 2.7,
-            switch_isclosed: [false; 16],
+            switch_isclosed: [false; SWITCHES_MAX],
             switch_state: SwitchState::None,
-            output: [0; 16],
-            indicator_duty: [128, 128, 128],
-            rgb_duty: [90, 100, 110],
+            output: [0; OUTPUTS_MAX],
+
+	    // 8-bit R, G, B values scaled 0-99
+            indicator_duty: [50, 50, 50],
+            rgb_duty: [35, 39, 43],
             controller: Default::default(),
             indicators: Default::default(),
         }
@@ -74,10 +76,10 @@ impl TemplateApp {
             Default::default()
         };
 
-        let (sw0_idx, _out0_idx) = app.controller.add_switch(2);
-        let (sw1_idx, _out1_idx) = app.controller.add_switch(2);
-        let (sw2_idx, _out2_idx) = app.controller.add_switch(5);
-        let (_sw_l_idx, _out_l_idx) = app.controller.augment_switch_longpress(sw0_idx, 2);
+        let (sw0_idx, _out0_idx) = app.controller.add_switch(2, 1);
+        let (sw1_idx, _out1_idx) = app.controller.add_switch(2, 0);
+        let (sw2_idx, _out2_idx) = app.controller.add_switch(5, 0);
+        let (_sw_l_idx, _out_l_idx) = app.controller.augment_switch_longpress(sw0_idx, 2, 0);
         assert!(sw0_idx == 0 && sw1_idx == 1 && sw2_idx == 2);
 
         app

@@ -1,15 +1,22 @@
-use core::panic;
-use log::warn;
-
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(or(target_arch = "wasm32", target_arch = "thumbv6m")))]
 use std::time::{Duration, Instant};
+use log::warn;
+use std::panic;
 #[cfg(target_arch = "wasm32")]
 use web_time::{Duration, Instant};
+use log::warn;
+use std::panic;
+#[cfg(target_arch = "thumbv6m")]
+use embassy_time::{Duration, Instant};
+use defmt::warn;
+use core::panic;
 
-const SWITCHES: usize = 16;
-const OUTPUTS: usize = 16;
+// Avoiding a heap implies some fixed-size arrays
+// This lets the compiler help enforce bounds too
+pub const SWITCHES_MAX: usize = 3;
+pub const OUTPUTS_MAX: usize = 4;
 
-fn report_from_none(incoming: [bool; 16]) -> (SwitchState, Option<StateDetail>) {
+fn report_from_none(incoming: [bool; SWITCHES_MAX]) -> (SwitchState, Option<StateDetail>) {
     if let Some(first_idx) = incoming
         .iter()
         .enumerate()
@@ -41,11 +48,11 @@ fn report_from_none(incoming: [bool; 16]) -> (SwitchState, Option<StateDetail>) 
 #[derive(Clone, Copy)]
 struct StateDetail {
     stamp: Instant,
-    switches: [bool; SWITCHES],
+    switches: [bool; SWITCHES_MAX],
 }
 
 fn report_from_one(
-    incoming: [bool; SWITCHES],
+    incoming: [bool; SWITCHES_MAX],
     parent: &mut MomentaryController,
 ) -> (SwitchState, Option<StateDetail>) {
     let deets_before = parent.state_detail.unwrap();
@@ -127,7 +134,7 @@ fn report_from_one(
     }
 }
 
-fn report_from_long(incoming: [bool; SWITCHES]) -> (SwitchState, Option<StateDetail>) {
+fn report_from_long(incoming: [bool; SWITCHES_MAX]) -> (SwitchState, Option<StateDetail>) {
     if incoming.iter().find(|x| **x).into_iter().count() == 0 {
         // End the long-press state, during which no other switch changes have any effect.
         (SwitchState::None, None)
@@ -141,13 +148,13 @@ fn report_from_long(incoming: [bool; SWITCHES]) -> (SwitchState, Option<StateDet
 /// State when one switch has been held closed briefly (less than the long-press duration), opened before the long-press duration has passed, then closed again before the double-press duration has passed; all without another switch being closed. In this state, with that initial switch closed, other switches may then be closed subsequently (but we will not recognize double- or long-presses of those subsequent switches).
 struct DoubleState {
     stamp: Instant,
-    switches: [bool; SWITCHES],
+    switches: [bool; SWITCHES_MAX],
 }
 
 /// State when one switch has been held closed briefly (less than the long-press duration), and during this interval another switch is closed. This state holds until the first switch is opened.
 struct MultiState {
     stamp: Instant,
-    switches: [bool; SWITCHES],
+    switches: [bool; SWITCHES_MAX],
 }
 */
 
@@ -179,19 +186,19 @@ pub struct MomentaryController {
     outputs: usize,
 
     /// Our record of the outputs themselves
-    output: [u8; OUTPUTS],
+    output: [u8; OUTPUTS_MAX],
 
     /// Output state from which first report generates first change. Moved to output at first report, invalid after that.
-    output_init: [u8; OUTPUTS],
+    output_init: [u8; OUTPUTS_MAX],
 
     /// Has a long-press output been established for this switch?
-    has_long: [bool; SWITCHES],
+    has_long: [bool; SWITCHES_MAX],
 
     /// If a long-press output has been established for this switch, which output?
-    long: [usize; SWITCHES],
+    long: [usize; SWITCHES_MAX],
 
     /// For each output, how many possible states? On/off: 2, low/med/high: 4, for example.
-    output_cycles: [u8; OUTPUTS],
+    output_cycles: [u8; OUTPUTS_MAX],
 
     /// Maximum open time between input closes to register a double-press event
     //    double_open: Duration,
@@ -206,11 +213,11 @@ impl Default for MomentaryController {
             started: false,
             switches: 0,
             outputs: 0,
-            output: [0; OUTPUTS],
-            output_cycles: [0; OUTPUTS],
-            output_init: [0; OUTPUTS],
-            has_long: [false; SWITCHES],
-            long: [0; SWITCHES],
+            output: [0; OUTPUTS_MAX],
+            output_cycles: [0; OUTPUTS_MAX],
+            output_init: [0; OUTPUTS_MAX],
+            has_long: [false; SWITCHES_MAX],
+            long: [0; SWITCHES_MAX],
             //            double_open: Duration::from_millis(500),
             long_closed: Duration::from_millis(1500),
             state: SwitchState::None,
@@ -225,11 +232,11 @@ impl MomentaryController {
             started: false,
             switches: 0,
             outputs: 0,
-            output: [0; OUTPUTS],
-            output_cycles: [0; OUTPUTS],
-            output_init: [0; OUTPUTS],
-            has_long: [false; SWITCHES],
-            long: [0; SWITCHES],
+            output: [0; OUTPUTS_MAX],
+            output_cycles: [0; OUTPUTS_MAX],
+            output_init: [0; OUTPUTS_MAX],
+            has_long: [false; SWITCHES_MAX],
+            long: [0; SWITCHES_MAX],
             //            double_open: double_duration,
             long_closed: long_duration,
             state: SwitchState::None,
@@ -239,7 +246,7 @@ impl MomentaryController {
 
     /// General case add-a-switch with all parameters.
     /// Return the index of the switch added (same as output index)
-    pub fn add_switch(&mut self, output_cycle: u8) -> (usize, usize) {
+    pub fn add_switch(&mut self, output_cycle: u8, output_init: u8) -> (usize, usize) {
         if self.started {
             panic!("Don't add switches after first .report()");
         }
@@ -247,6 +254,7 @@ impl MomentaryController {
         self.switches += 1;
         let output_idx = self.outputs;
         self.output_cycles[output_idx] = output_cycle;
+	self.output_init[output_idx] = output_init;
         self.outputs += 1;
         (switch_idx, output_idx)
     }
@@ -256,6 +264,7 @@ impl MomentaryController {
         &mut self,
         switch_idx: usize,
         output_cycle: u8,
+	output_init: u8,
     ) -> (usize, usize) {
         if self.started {
             panic!("Don't augment switches after first .report()");
@@ -266,12 +275,13 @@ impl MomentaryController {
         let output_idx = self.outputs;
         self.outputs += 1;
         self.output_cycles[output_idx] = output_cycle;
+	self.output_init[output_idx] = output_init;
         self.has_long[switch_idx] = true;
         self.long[switch_idx] = output_idx;
         (switch_idx, output_idx)
     }
 
-    pub fn report(&mut self, incoming: [bool; SWITCHES]) -> ([u8; OUTPUTS], SwitchState) {
+    pub fn report(&mut self, incoming: [bool; SWITCHES_MAX]) -> ([u8; OUTPUTS_MAX], SwitchState) {
         if !self.started {
             self.output = self.output_init;
             self.started = true;
@@ -300,10 +310,10 @@ mod test {
     fn none_from_none() {
         let mut c: MomentaryController = Default::default();
         c.add_switch(2);
-        let ins: [bool; SWITCHES] = [false; SWITCHES];
+        let ins: [bool; SWITCHES_MAX] = [false; SWITCHES_MAX];
 
         c.report(ins);
-        assert_eq!(c.output, [0; OUTPUTS]);
+        assert_eq!(c.output, [0; OUTPUTS_MAX]);
         matches!(c.state, SwitchState::None);
     }
 
@@ -311,24 +321,24 @@ mod test {
     fn one_from_none() {
         let mut c: MomentaryController = Default::default();
         c.add_switch(2);
-        let mut ins: [bool; SWITCHES] = [false; SWITCHES];
+        let mut ins: [bool; SWITCHES_MAX] = [false; SWITCHES_MAX];
         ins[0] = true;
         c.report(ins);
         matches!(c.state, SwitchState::One);
-        assert_eq!(c.output, [0; OUTPUTS]);
+        assert_eq!(c.output, [0; OUTPUTS_MAX]);
     }
 
     fn state_one_from_scratch() -> (
         MomentaryController,
         usize,
         usize,
-        [bool; SWITCHES],
-        [u8; OUTPUTS],
+        [bool; SWITCHES_MAX],
+        [u8; OUTPUTS_MAX],
         SwitchState,
     ) {
         let mut c: MomentaryController = Default::default();
         let (sw0, out0) = c.add_switch(2);
-        let mut ins: [bool; SWITCHES] = [false; SWITCHES];
+        let mut ins: [bool; SWITCHES_MAX] = [false; SWITCHES_MAX];
         ins[sw0] = true;
         let (output, state) = c.report(ins);
         (c, sw0, out0, ins, output, state)
@@ -341,8 +351,8 @@ mod test {
         assert_eq!(out0, 0);
         matches!(state, SwitchState::One);
         assert!(ins[0]);
-        assert_eq!(ins[1..], [false; SWITCHES - 1]);
-        assert_eq!(output, [0; OUTPUTS]);
+        assert_eq!(ins[1..], [false; SWITCHES_MAX - 1]);
+        assert_eq!(output, [0; OUTPUTS_MAX]);
     }
 
     #[test]
@@ -354,8 +364,8 @@ mod test {
 
         matches!(state, SwitchState::One);
         assert!(ins[0]);
-        assert_eq!(ins[1..], [false; SWITCHES - 1]);
-        assert_eq!(output, [0; OUTPUTS]);
+        assert_eq!(ins[1..], [false; SWITCHES_MAX - 1]);
+        assert_eq!(output, [0; OUTPUTS_MAX]);
     }
 
     #[test]
@@ -368,6 +378,6 @@ mod test {
 
         matches!(state, SwitchState::None);
         assert_eq!(output[out0], 1);
-        assert_eq!(c.output[1..], [0; OUTPUTS - 1]);
+        assert_eq!(c.output[1..], [0; OUTPUTS_MAX - 1]);
     }
 }

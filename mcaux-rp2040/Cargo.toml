@@ -63,4 +63,6 @@ portable-atomic = { version = "1.5", features = ["critical-section"] }
 log = "0.4"
 rand = { version = "0.9.0", default-features = false }
 embedded-sdmmc = "0.7.0"
+momentary = { version = "0.1.0", path = "../momentary" }
+
 
