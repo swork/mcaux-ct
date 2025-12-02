@@ -64,8 +64,8 @@ jobs:
         env:
           JEKYLL_ENV: production
 
-      - name: Integrate demo
-        run: mkdir _site/demo && mv demo/dist _site/demo
+      - name: Integrate demo as "mockup" so Jekyll can build docs under "demo"
+        run: mkdir _site/mockup && mv demo/dist _site/mockup
 
       - name: upload artifact
         id: deployment
