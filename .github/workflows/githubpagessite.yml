@@ -49,7 +49,7 @@ jobs:
         run: pwd
 
       - name: List directory contents, and demo subdir
-        run: ls -al /home/runner/work/mcaux-ct/mcaux-ct/ /home/runner/work/mcaux-ct/mcaux-ct/demo /home/runner/work/mcaux-ct/mcaux-ct/demo/dist /home/runner/work/mcaux-ct/mcaux-ct/demo/dist/demo
+        run: ls -al /home/runner/work/mcaux-ct/mcaux-ct/ /home/runner/work/mcaux-ct/mcaux-ct/demo /home/runner/work/mcaux-ct/mcaux-ct/demo/dist
 
       - name: Setup Ruby for Jekyll
         uses: ruby/setup-ruby@v1
