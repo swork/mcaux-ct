@@ -7,13 +7,13 @@ env:
   RUSTDOCFLAGS: -D warnings
 
 jobs:
-  defaults:
-    run:
-      working-directory: mcaux-rp2040
       
   check:
     name: Check
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcaux-rp2040
     steps:
       - run: pwd
         name: What dir are we in at start of Check?
@@ -31,6 +31,9 @@ jobs:
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcaux-rp2040
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -47,6 +50,9 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcaux-rp2040
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -62,6 +68,9 @@ jobs:
 
   build:
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: mcaux-rp2040
     strategy:
       fail-fast: false
       matrix:
