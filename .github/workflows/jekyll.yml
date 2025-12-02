@@ -46,7 +46,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.putputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-github-pages
     steps:
       - name: Deploy to GitHub Pages at swork.github.io/mcaux-ct
         id: deployment
