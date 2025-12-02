@@ -1,5 +1,5 @@
 [package]
-name = "mcaux-indicators"
+name = "indicators"
 version = "0.1.0"
 edition = "2024"
 
@@ -8,4 +8,5 @@ log = "0.4.28"
 momentary = { version = "0.1.0", path = "../momentary" }
 
 [features]
-async = []
+default = ["std"]
+std = []

@@ -1,5 +1,5 @@
 [package]
-name = "mcaux_ct"
+name = "mcaux_ct_demo"
 version = "0.1.0"
 authors = ["Steve Work <steve@work.renlabs.com>"]
 edition = "2024"
@@ -9,6 +9,9 @@ rust-version = "1.88"
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
+
+[features]
+not-no-std = []
 
 [dependencies]
 egui = "0.33.0"
@@ -22,18 +25,20 @@ eframe = { version = "0.33.0", default-features = false, features = [
 
 # You only need serde if you want app persistence:
 serde = { version = "1.0.219", features = ["derive"] }
-momentary = { version = "0.1.0", path = "../momentary" }
 log = "0.4.28"
-web-time = "1.1.0"
-mcaux-indicators = { version = "0.1.0", path = "../mcaux-indicators" }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11.8"
+momentary = { version = "0.1.0", path = "../momentary", features = ["not-no-std"] }
+indicators = { version = "0.1.0", path = "../mcaux-indicators" }
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4.50"
 web-sys = "0.3.70"              # to access the DOM (to hide the loading text)
+web-time = "1.1.0"
+momentary = { version = "0.1.0", features = ["wasm"], path = "../momentary" }
+indicators = { version = "0.1.0", default-features = false, path = "../mcaux-indicators" }
 
 

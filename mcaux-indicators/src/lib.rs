@@ -1,3 +1,7 @@
+#![no_std]
+#[cfg(feature = "std")]
+extern crate std;
+
 // mcaux-indicators/src/lib.rs
 
 /// Provide LED levels and level-change animations for mcaux.
@@ -36,7 +40,7 @@ impl IndicatorController {
     }
 }
 
-fn color_for_heat_level(level: u8) -> [u8; 3] {
+pub fn color_for_heat_level(level: u8) -> [u8; 3] {
     match level {
         0 => [0, 0, 0],       // off
         1 => [170, 50, 50],   // dull red

@@ -3,10 +3,11 @@ name = "momentary"
 version = "0.1.0"
 edition = "2024"
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-log = "0.4.28"
-tracing = "0.1.41"
-web-time = "1.1.0"
+[features]
+not-no-std = []
+embassy = ["dep:embassy-time"]
+wasm = ["dep:web-time"]
 
-[target.'cfg(target_arch = "thumbv6m")'.dependencies]
-embassy-time = { version = "0.5.0", path = "/home/steve/Code/Github/embassy/embassy-time", features = ["defmt", "defmt-timestamp-uptime"] }
+[dependencies]
+embassy-time = { version = "0.5.0", optional = true, path = "/home/steve/Code/Github/embassy/embassy-time", features = ["defmt", "defmt-timestamp-uptime"] }
+web-time = { version = "1.1.0", optional = true }

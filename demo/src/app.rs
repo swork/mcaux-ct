@@ -1,4 +1,5 @@
-use momentary::SwitchState;
+#[cfg(feature = "not-no-std")]
+extern crate std;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 #[cfg(target_arch = "wasm32")]
@@ -11,8 +12,8 @@ use egui::Sense;
 use egui::Stroke;
 use log::info;
 
-use mcaux_indicators::IndicatorController;
-use momentary::{MomentaryController, SWITCHES_MAX, OUTPUTS_MAX};
+use indicators::IndicatorController;
+use momentary::{MomentaryController, OUTPUTS_MAX, SWITCHES_MAX, SwitchesState};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -28,7 +29,7 @@ pub struct TemplateApp {
     #[serde(skip)]
     output: [u8; OUTPUTS_MAX],
     #[serde(skip)]
-    switch_state: SwitchState,
+    switch_state: SwitchesState,
 
     // duty cycles are 0-100 inclusive, matching embassy_rp API
     #[serde(skip)]
@@ -50,10 +51,10 @@ impl Default for TemplateApp {
             label: "Hello moto world!".to_owned(),
             value: 2.7,
             switch_isclosed: [false; SWITCHES_MAX],
-            switch_state: SwitchState::None,
+            switch_state: SwitchesState::None,
             output: [0; OUTPUTS_MAX],
 
-	    // 8-bit R, G, B values scaled 0-99
+            // 8-bit R, G, B values scaled 0-99
             indicator_duty: [50, 50, 50],
             rgb_duty: [35, 39, 43],
             controller: Default::default(),
