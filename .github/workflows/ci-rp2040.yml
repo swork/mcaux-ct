@@ -1,0 +1,87 @@
+on: [push, pull_request, workflow_dispatch]
+
+name: CI rp2040
+
+env:
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  defaults:
+    run:
+      working-directory: mcaux-rp2040
+      
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - run: pwd
+        name: What dir are we in at start of Check?
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --all-features
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings
+
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: none
+          TARGET: arm-none-eabi
+
+    steps:
+    - name: Building ${{ matrix.TARGET }}
+      run: echo "${{ matrix.TARGET }}"
+
+    - uses: actions/checkout@master
+    - uses: actions-rs/toolchain@v1.0.1
+      with:
+        toolchain: stable
+        target: ${{ matrix.TARGET }}
+        override: true
+
+    - uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: build
+        args: --verbose --release --target=${{ matrix.TARGET }}

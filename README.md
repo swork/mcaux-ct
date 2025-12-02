@@ -7,9 +7,9 @@ This is the repo for mcaux-ct, my motorcycle auxiliary equipment controller, a q
 
 Independent separate crates are subdirs - Rust doesn't make it easy to manage a workspace crate that builds to different architectures, so let's just duck the problems:
 
- - momentary/ abstracts some of the problems of doing state-changey things with momentary contact switches. It includes tests that run on the host, but also some conditional compilation so it can be used in the rp2XXX firmware.
+ - momentary/ abstracts some of the problems of doing state-changey things with momentary contact switches. It includes tests that run on the host, but also some conditional compilation so it can be used in the rp2XXX firmware, and as part of a host-native demo app that can also be built to run on WASM in a web browser. (egui/eframe make this last bit possible.)
  
- - demo/ builds an egui/eframe mockup of the switches mostly for testing and experimenting with momentary/. It does not try to match the indicator animations in mcaux-rp2040, as the needs of color adjustments in egui and PWM manipulations under LED hardware are awkwardly different.
+ - demo/ builds that egui/eframe mockup of the switches mostly for testing and experimenting with momentary/. It does not (yet?) try to match the indicator animations in mcaux-rp2040, as the needs of color adjustments in egui and PWM manipulations under LED hardware are awkwardly different.
  
  - mcaux-rp2040 builds the firmware to run the switches box on the motorcycle.
  

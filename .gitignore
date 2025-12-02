@@ -1,6 +1,12 @@
 # Mac stuff:
 .DS_Store
 
+# Unmodified emacs backup files
+*~
+
+# Jekyll site folder
+_site
+
 # trunk output folder
 dist
 
