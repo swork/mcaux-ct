@@ -60,7 +60,7 @@ jobs:
   deploy:
     environment:
       name: Mockup
-      url: ${{ steps.deployment.outputs.page_url }}-demo
+      url: ${{ steps.mockup.outputs.page_url }}-demo
     runs-on: ubuntu-latest
     needs: build
     steps:
