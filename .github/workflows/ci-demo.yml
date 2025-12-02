@@ -14,8 +14,8 @@ jobs:
       run:
         working-directory: demo
     steps:
-      - run: pwd
       - uses: actions/checkout@v4
+      - run: pwd
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
