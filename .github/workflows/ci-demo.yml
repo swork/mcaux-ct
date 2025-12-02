@@ -7,13 +7,12 @@ env:
   RUSTDOCFLAGS: -D warnings
 
 jobs:
-  # Is this supported at this level? Is down one, with caveats. And under "steps".
-  defaults:
-    run:
-      working-directory: demo
   check:
     name: Check
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -29,6 +28,9 @@ jobs:
   check_wasm:
     name: Check wasm32
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -45,6 +47,9 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -61,6 +66,9 @@ jobs:
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -77,6 +85,9 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -93,6 +104,9 @@ jobs:
   trunk:
     name: trunk
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -108,6 +122,9 @@ jobs:
 
   build:
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: demo
     strategy:
       fail-fast: false
       matrix:
