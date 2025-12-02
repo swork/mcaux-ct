@@ -1,0 +1,11 @@
+title: Motorcycle Auxiliary Equipment Switchgear
+email: steve@work.renlabs.com
+description: "Nice switching for my moto's electrical add-ons"
+baseurl: "mcaux-ct" # the subpath of your site, e.g. /blog
+url: "https://swork.github.io"
+github_username:  swork
+
+# Build settings
+theme: minima
+plugins:
+  - jekyll-feed
