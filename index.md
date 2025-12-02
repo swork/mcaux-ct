@@ -11,7 +11,10 @@ south end that finished Laurie's full traverse of the trail this
 year. I scrambled to the massif of the Middle Teton, which felt like
 an accomplishment, though bragging about it that evening led my
 friends to think I was claiming to have summitted.  (No, I did not.)
-It was a wonderful, memorable visit.
+It was a wonderful, memorable visit, hitting the peak of fall aspen
+colors.
+
+[assets/paddleboard.jpg]
 
 As I'd hoped, the weather in mid-October still allowed this to be a
 motorcycle trip. It was by far the longest I've done at 2400 miles, a
