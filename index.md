@@ -1,22 +1,22 @@
 ---
-title: An auxiliary equipment switch kit for my motorcycle 
+title: Moto switchgear
 author: Steve Work <steve@work.renlabs.com>
 ---
 In the fall of 2025 I visited my friends Chip and Laurie at Grand
 Teton National Park, where they live and work. We paddleboarded the
-Snake River through a good chunk of the park, and hiked a section of
+Snake River through a good chunk of the park and hiked a section of
 the Teton Crest Trail - the day-long section that finished Laurie's
 full traverse of the trail this year. I scrambled to the massif of the
-Middle Teton, which felt like an accomplishment though in bragging
-about it my friends thought I was saying I had climbed to the peak!
+Middle Teton, which felt like an accomplishment, though bragging
+about it that evening led my friends to think I was claiming to have summitted.
 (No, I did not.) It was a wonderful and memorable visit.
 
-As I'd hoped, the weather in mid-October still sort-of allowed this to be a
+As I'd hoped, the weather in mid-October still allowed this to be a
 motorcycle trip. It was by far the longest I've done at 2400 miles, a
-thousand each way and a bunch of exploration in Wyoming in between
+thousand each way and a bunch of exploration in Wyoming, in between
 beer-and-pizza nights at Dornan's watching the sun go down over the
-Tetons or barbequing salmon on their deck, overlooking the same
-mountains from a different angle.
+Tetons or barbequing salmon on their deck, looking at the same
+amazing mountains from a different angle.
 
 I'm not an impressively seasoned motorcyclist. I've owned four
 widely-differing machines to date but never built my life around them,
@@ -36,15 +36,15 @@ Idaho rather than cross 8423-foot Teton Pass into Jackson in rain that
 might well become ice). Montana freeway traffic regularly exceeds
 90mph against a nominal speed limit of 80, and staying safe against
 cruise zombies from behind meant flogging my aging KLR650 without
-mercy. Which in turn meant flogging myself, crouched behind a tiny
+mercy. Which in turn meant flogging myself, crouched behind its tiny
 windscreen holding the throttle against the stop for about an hour at
-a time until the four-gallon tank needed a refill. Yes, that's 25
+a time until the four-gallon tank needed filling. Yes, that's 25
 miles per gallon in a machine that under normal circumstances does
 50mpg.
 
 And yes, it's a KLR650 - an oversized dirt bike with one big piston
 and a license plate. Kawasaki first built these things in 1987
-(patterned on a 600 from even earlier) and my generation-one 2002
+(patterned on a 600cc product from even earlier) and my generation-one 2002
 model is mostly the same bike you can buy new today. They were and are
 sold all over the world and used in all conditions, on all surfaces,
 for all purposes. They're exceptional at none of this, saving that
@@ -53,26 +53,29 @@ that way for several hundred thousand miles assuming reasonable
 maintenance.
 
 I wasn't so much excited by the idea of doing this long a trip on a
-KLR as I was by having the KLR when I arrived. At my friends'
+KLR as I was by having the KLR with me when I arrived. At my friends'
 suggestions I rode up muddy rutted trailhead access roads effectively
 impassible to passenger vehicles saving the most aggressive
 high-clearance 4WDs. On another day I rode a spectacular section of
 the Beartooth Highway and the Chief Joseph Scenic Byway (which would
-have been worth the long trip all by themselves). I did these things
-on the same bike, and had my attention on the scenery and the
-experience (and the traffic, of course) - not so much on the
-machine. It simply gets out of the way and gets it done.
+have been worth the long trip all by themselves, in or on any
+conveyance). I did these things on the same bike, and had my attention
+on the scenery and the experience (and the road and the traffic, of
+course) - not so much on the machine. It simply gets out of the way
+and gets it done.
 
 That said, it doesn't go out of its way to make anything especially
 easy or comfortable. My hands suffered from the cold (and probably
 from vibration too), multiplied by hours of holding against the
 throttle spring and much of the time the throttle stop. My phone (read
-"navigation aid") would have died clamped to the handlebars, but was
-very hard to see and use in the clear-covered top compartment of my
-tank bag - and frequently died there anyway, overheating in the sun. I
-mostly avoided riding at night, but would surely have appreciated a whole lot
-more light out front even in twilight - 1984's best headlight tech was not
-terrific.
+"navigation aid") [would have
+died](https://www.reddit.com/r/motorcycles/comments/13k26z0/phone_camera_sensors_breaking_on_motorcycle/)
+clamped to the handlebars, but was very hard to see and use in the
+clear-covered top compartment of my tank bag - and frequently died
+there anyway, overheating very quickly in the sun. I mostly avoided
+riding at night, but would have appreciated a whole lot more light out
+front even in twilight - 1984's best headlight tech was not great, and
+this bike's was not the best.
 
 ## An art project is born
 
@@ -113,5 +116,5 @@ Since I need my spouse to understand why I'm spending so much time on
 such a trivial task I've been referring to it as an Art Project,
 elevating it to a stature that can more easily be defended against
 judgements about my priorities. The strawberry patch will always need
-weeding so I just have to jack these silly self-satisfaction efforts
+weeding so I just have to force these silly self-satisfaction efforts
 in where I can. Nomenclature matters.
