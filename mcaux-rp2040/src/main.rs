@@ -13,7 +13,14 @@ use fixed::FixedU16;
 use fixed::types::extra::U4;
 use indicators::color_for_heat_level;
 use momentary::{MomentaryController, OUTPUTS_MAX, SWITCHES_MAX, SwitchesState};
-use {defmt_rtt as _, panic_probe as _};
+use {defmt_rtt as _}; //, panic_probe as _};
+
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    defmt::error!("Panic occurred: {:?}", defmt::Display2Format(info));
+    // whatever else to do
+    loop {} // Halt the program
+}
 
 /// How many receive slots for inter-task Channels
 const SWITCH_CHANNEL_DEPTH: usize = 5; // TODO: 1 should be sufficient, experiment
@@ -92,8 +99,8 @@ struct SwitchStateReport {
 /// Entry point
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    defmt::trace!("main()");
     let p = embassy_rp::init(Default::default());
+    defmt::trace!("Startup");
 
     // State machine tells which outputs are on as inputs change.
     // TODO Isn't this an Advisor, as we do the controlling in our loop?

@@ -25,24 +25,22 @@ fn report_from_none(incoming: [bool; SWITCHES_MAX]) -> (SwitchesState, Option<St
         .map(|(index, _)| index)
     {
         if incoming[first_idx + 1..].iter().any(|&x| x) {
-            // multiple switches closed at the same time, unlikely in hardware but let's be robust.
-            // Note the possibility that this event could be within the double-click time of one
-            // switch or the other, making it ambiguous - did they mean to press both switches, or a double-click of that
-            // switch, or a multi-click following a single click? We simply assume the latter here.
-            //
-            panic!("MULTI not yet implemented");
-        }
-
-        return (
-            SwitchesState::One,
-            Some(StateDetail {
-                stamp: Instant::now(),
-                switches: incoming,
-            }),
-        );
+            // multiple switches closed at the same time, relative to report() calls.
+            // We don't know which was pressed first, and don't have an action for this case.
+	    // Caller should be less generous with debounce waits?
+	    (SwitchesState::Jammed, None,)
+        } else {
+            (
+		SwitchesState::One,
+		Some(StateDetail {
+                    stamp: Instant::now(),
+                    switches: incoming,
+		}),
+            )
+	}
+    } else {
+	(SwitchesState::None, None)
     }
-
-    (SwitchesState::None, None)
 }
 
 /// State while one button is held closed briefly.
@@ -50,6 +48,18 @@ fn report_from_none(incoming: [bool; SWITCHES_MAX]) -> (SwitchesState, Option<St
 struct StateDetail {
     stamp: Instant,
     switches: [bool; SWITCHES_MAX],
+}
+
+fn report_from_jammed(
+    incoming: [bool; SWITCHES_MAX],
+) -> (SwitchesState, Option<StateDetail>) {
+    if incoming.iter().any(|&x| x) {
+	// A button is down so we're still jammed.
+	(SwitchesState::Jammed, None,)
+    } else {
+	// No button is down. Back to None.
+	(SwitchesState::None, None,)
+    }
 }
 
 fn report_from_one(
@@ -64,8 +74,6 @@ fn report_from_one(
         .find(|&(_, &x)| x)
         .map(|(index, _)| index)
     {
-        // first handle MULTI. Else:
-
         // No change? Long-press, or do nothing.
         if incoming == deets_before.switches {
             // Check for long-press
@@ -90,26 +98,32 @@ fn report_from_one(
             // Switches changed, and at least one is still down.
 
             if incoming[first_idx + 1..].iter().any(|&x| x) {
-                // multiple switches closed at the same time, unlikely in hardware but let's be robust.
-                // Note the possibility that this event could be within the double-click time of one
-                // switch or the other, making it ambiguous - did they mean to press both switches, or a double-click of that
-                // switch, or a multi-click following a single click? We simply assume the latter here.
-                //
-                panic!("MULTI not yet implemented");
+                // multiple switches are now closed. We're jammed until all released (no MULTI yet)
+		(SwitchesState::Jammed, None,)
             } else {
                 // They report one switch is closed. Was it reported closed already?
                 if deets_before.switches[first_idx] {
                     panic!("Trouble: should have already caught the no-change case");
                 }
 
-                // Yikes, they released the switch but a different switch is down. Treat this like a second report
-                panic!("Simultaneous release and press of two switches not yet implemented");
+                // Yikes, they released the switch but a different switch is down. Treat this like a second button press.
+		// First toggle the output of the switch that just opened
+		parent.output[first_idx] += 1;
+		if parent.output[first_idx] >= parent.output_cycles[first_idx] {
+                    parent.output[first_idx] = 0
+		}
+		// Then make a new start with the new button down.
+		(
+		    SwitchesState::One,
+		    Some(StateDetail {
+			stamp: Instant::now(),
+			switches: incoming,
+		    }),
+		)
             }
         }
     } else {
-        // They released the only switch that was down, before the long-press timer expired.
-        // (Learning this requires the caller to report() repeatedly with no-change reports
-        //  while switches are closed.)
+	// Which switch was closed previously? It's now open, prior to Long, so cycle its output.
         if let Some(first_idx) = deets_before
             .switches
             .iter()
@@ -117,8 +131,12 @@ fn report_from_one(
             .find(|&(_, &x)| x)
             .map(|(index, _)| index)
         {
+            // They released the only switch that was down, before the long-press timer expired.
+            // (Learning this requires the caller to report() repeatedly with no-change reports
+            //  while switches are closed.)
+	    
             // Check our work: be sure there wasn't a second switch down previously,
-            // with both released at the same moment
+            // with both released at the same moment. This is just paranoia.
             if deets_before.switches[first_idx + 1..].iter().any(|&x| x) {
                 panic!("Logic problem: in state One we found 2 or more switches closed.");
             }
@@ -130,7 +148,8 @@ fn report_from_one(
             }
             (SwitchesState::None, None)
         } else {
-            panic!("Logic trouble, no-switches-before case should have been caught above");
+	    // more paranoia
+            panic!("Logic trouble, we were in state One but with no switches closed previously.");
         }
     }
 }
@@ -164,6 +183,7 @@ pub enum SwitchesState {
     None,
     One,
     Long,
+    Jammed,  // two switches went down at the same time. Nothing to do, do nothing.
     /*
     Double(DoubleState),
     Multi(MultiState),
@@ -315,7 +335,9 @@ impl MomentaryController {
         (self.switches_state, self.state_detail) = match self.switches_state {
             SwitchesState::None => report_from_none(incoming),
             SwitchesState::One => report_from_one(incoming, self),
-            SwitchesState::Long => report_from_long(incoming), /*
+            SwitchesState::Long => report_from_long(incoming),
+	    SwitchesState::Jammed => report_from_jammed(incoming),
+	    /*
                                                              SwitchesState::Multi(..) => {
                                                                  panic!("not implemented")
                                                              }
@@ -346,7 +368,9 @@ mod test {
     #[test]
     fn one_from_none() {
         let mut c: MomentaryController = Default::default();
-        c.add_switch(2, 0);
+        let (sw0_idx, out0_idx) = c.add_switch(2, 0);
+	assert_eq!(sw0_idx, 0);
+	assert_eq!(out0_idx, 0);
         let mut ins: [bool; SWITCHES_MAX] = [false; SWITCHES_MAX];
         ins[0] = true;
         c.report(ins);
@@ -356,25 +380,21 @@ mod test {
 
     fn state_one_from_scratch() -> (
         MomentaryController,
-        usize,
-        usize,
         [bool; SWITCHES_MAX],
         [u8; OUTPUTS_MAX],
         SwitchesState,
     ) {
         let mut c: MomentaryController = Default::default();
-        let (sw0, out0) = c.add_switch(2, 0);
+        let (sw0_idx, _out0_idx) = c.add_switch(2, 0);
         let mut ins: [bool; SWITCHES_MAX] = [false; SWITCHES_MAX];
-        ins[sw0] = true;
+        ins[sw0_idx] = true; // idx is zero, tested in one_from_none above. out0_idx too.
         let (output, state) = c.report(ins);
-        (c, sw0, out0, ins, output, state)
+        (c, ins, output, state)
     }
 
     #[test]
     fn validate_setup_state_one() {
-        let (_c, sw0, out0, ins, output, state) = state_one_from_scratch();
-        assert_eq!(sw0, 0);
-        assert_eq!(out0, 0);
+        let (_c, ins, output, state) = state_one_from_scratch();
         matches!(state, SwitchesState::One);
         assert!(ins[0]);
         assert_eq!(ins[1..], [false; SWITCHES_MAX - 1]);
@@ -383,7 +403,7 @@ mod test {
 
     #[test]
     fn one_from_one() {
-        let (mut c, _sw0, _out0, ins, _output, _state) = state_one_from_scratch();
+        let (mut c, ins, _output, _state) = state_one_from_scratch();
 
         // repeat same input
         let (output, state) = c.report(ins);
@@ -396,14 +416,67 @@ mod test {
 
     #[test]
     fn none_from_one() {
-        let (mut c, _sw0, out0, mut ins, _output, _state) = state_one_from_scratch();
+        let (mut c, mut ins, _output, _state) = state_one_from_scratch();
 
         // open the switch
         ins[0] = false;
         let (output, state) = c.report(ins);
 
         matches!(state, SwitchesState::None);
-        assert_eq!(output[out0], 1);
-        assert_eq!(c.output[1..], [0; OUTPUTS_MAX - 1]);
+        assert_eq!(output[0], 1);
+        assert_eq!(output[1..], [0; OUTPUTS_MAX - 1]);
+    }
+
+    #[test]
+    fn jammed_from_one() {
+        let (mut c, mut ins, _output, _state) = state_one_from_scratch();
+
+        // close another switch
+        ins[1] = true;
+        let (output, state) = c.report(ins);
+
+        matches!(state, SwitchesState::Jammed);
+	// no change to output state for original switch, since it wasn't released
+        assert_eq!(output[0], 0);
+	// no change to any other output
+        assert_eq!(output[1..], [0; OUTPUTS_MAX - 1]);
+    }
+
+    #[test]
+    fn still_jammed_on_changes_and_unjammed_when_all_released() {
+        let (mut c, mut ins, output, _state) = state_one_from_scratch();
+        assert_eq!(output[..], [0; OUTPUTS_MAX]);
+
+        // close another switch to get jammed
+        ins[1] = true;
+        let (output, state) = c.report(ins);
+        matches!(state, SwitchesState::Jammed);
+        assert_eq!(output[..], [0; OUTPUTS_MAX]);
+
+	// open that other switch
+        ins[1] = false;
+        let (output, state) = c.report(ins);
+        matches!(state, SwitchesState::Jammed);
+        assert_eq!(output[..], [0; OUTPUTS_MAX]);
+
+	// close a different switch
+	ins[2] = true;
+        let (output, state) = c.report(ins);
+        matches!(state, SwitchesState::Jammed);
+        assert_eq!(output[..], [0; OUTPUTS_MAX]);
+
+	// open the original switch, stay jammed
+	ins[0] = false;
+        let (output, state) = c.report(ins);
+        matches!(state, SwitchesState::Jammed);
+        assert_eq!(output[..], [0; OUTPUTS_MAX]);
+
+	// One switch is still closed. Open it, get unjammed
+	ins[2] = false;
+        let (output, state) = c.report(ins);
+        matches!(state, SwitchesState::None);
+
+	// No outputs were turned on through that entire process.
+        assert_eq!(output[..], [0; OUTPUTS_MAX]);
     }
 }
