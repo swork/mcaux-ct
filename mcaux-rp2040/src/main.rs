@@ -197,18 +197,14 @@ async fn main(spawner: Spawner) {
         .expect("spawn indicator_controller"),
     );
 
-    /*
-    
     // Grip-heat PWM, output #2
-    let target_hz = 4u32;
-    let divider = 2049u32;  // want 3000u32; but making the bit pattern easy to see
-    let period = (clock_hz / (target_hz * divider)) as u16 - 1; // 10,415 @ 3000
+    let target_hz = 8u32;
+    let divider = 255u32;  // 8.4 fractional
+    let period = (clock_hz / (target_hz * divider)) as u16 - 1; // 61_274
     let mut grip_heat_pwm_config = Config::default();
     grip_heat_pwm_config.top = period;
     grip_heat_pwm_config.divider = FixedU16::<U4>::from_num(divider);
     let mut out2 = Pwm::new_output_a(p.PWM_SLICE1, p.PIN_18, grip_heat_pwm_config);
-
-    */
 
     let switches_receiver = SWITCHES_CHANNEL.dyn_receiver();
     let indicator_sender = INDICATOR_CHANNEL.sender();
@@ -235,16 +231,15 @@ async fn main(spawner: Spawner) {
         } else {
             Level::Low
         });
-	/*
-        out2.set_duty_cycle_percent(percent_for_grip_heat_value(outs[2]))
-        .expect("grip duty cycle");
-	*/
         out3.set_level(if outs[3] != 0 {
             Level::High
         } else {
             Level::Low
         });
 
+        out2.set_duty_cycle_percent(percent_for_grip_heat_value(outs[2]))
+            .expect("grip duty cycle");
+	
 	match switches_state {
 	    SwitchesState::None => {
 		let notice = switches_receiver.receive().await;
