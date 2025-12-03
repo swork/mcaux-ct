@@ -43,7 +43,7 @@ jobs:
       - name: Build WASM files collection (into demo/dist)
         run: cd demo && ../trunk build --release --public-url $public_url
         env:
-          public_url: "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}mockup"
+          public_url: "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/mockup"
 
       - name: Print current working directory
         run: pwd
