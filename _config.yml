@@ -9,3 +9,8 @@ github_username:  swork
 theme: minima
 plugins:
   - jekyll-feed
+
+exclude:
+  - "*/src"
+  - "*/Cargo.*"
+  - ".*"
