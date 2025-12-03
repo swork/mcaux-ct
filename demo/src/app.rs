@@ -79,9 +79,11 @@ impl TemplateApp {
 
         let (sw0_idx, _out0_idx) = app.controller.add_switch(2, 1);
         let (sw1_idx, _out1_idx) = app.controller.add_switch(2, 0);
-        let (sw2_idx, _out2_idx) = app.controller.add_switch(5, 0);
-        let (_sw_l_idx, _out_l_idx) = app.controller.augment_switch_longpress(sw0_idx, 2, 0);
+        let (sw2_idx, out2_idx) = app.controller.add_switch(5, 0);
+        let (_sw_l_idx, _out_l_idx) = app.controller.augment_switch_longpress_add_output(sw0_idx, 2, 0);
         assert!(sw0_idx == 0 && sw1_idx == 1 && sw2_idx == 2);
+
+	let (_, _) = app.controller.augment_switch_longpress_max_output(sw2_idx, out2_idx);
 
         app
     }

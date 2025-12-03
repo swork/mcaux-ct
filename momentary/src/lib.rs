@@ -71,11 +71,15 @@ fn report_from_one(
             // Check for long-press
             let interval = Instant::now().saturating_duration_since(deets_before.stamp);
             if parent.has_long[first_idx] && interval > parent.long_closed {
-                // This is a long-press.
+                // This is a long-press. It can mean cycle an output, or max an output.
                 let output_idx: usize = parent.long[first_idx];
-                parent.output[output_idx] += 1;
-                if parent.output[output_idx] >= parent.output_cycles[output_idx] {
-                    parent.output[output_idx] = 0;
+		if parent.long_specifies_max[first_idx] {
+		    parent.output[output_idx] = parent.output_cycles[output_idx] - 1;
+		} else {
+                    parent.output[output_idx] += 1;
+                    if parent.output[output_idx] >= parent.output_cycles[output_idx] {
+			parent.output[output_idx] = 0;
+		    }
                 }
                 (SwitchesState::Long, None)
             } else {
@@ -194,6 +198,11 @@ pub struct MomentaryController {
     /// If a long-press output has been established for this switch, which output?
     long: [usize; SWITCHES_MAX],
 
+    /// If a long-press output has been established for an output, bump (false) or max (true)?
+    /// Notice for a 2-cycle switch this amounts to unconditional On, and for any
+    /// switch long followed by short is an unconditional Off.
+    long_specifies_max: [bool; SWITCHES_MAX],
+
     /// For each output, how many possible states? On/off: 2, low/med/high: 4, for example.
     output_cycles: [u8; OUTPUTS_MAX],
 
@@ -215,8 +224,9 @@ impl Default for MomentaryController {
             output_init: [0; OUTPUTS_MAX],
             has_long: [false; SWITCHES_MAX],
             long: [0; SWITCHES_MAX],
+	    long_specifies_max: [false; SWITCHES_MAX],
             //            double_open: Duration::from_millis(500),
-            long_closed: Duration::from_millis(1500),
+            long_closed: Duration::from_millis(900),
             switches_state: SwitchesState::None,
             state_detail: None,
         }
@@ -234,6 +244,7 @@ impl MomentaryController {
             output_init: [0; OUTPUTS_MAX],
             has_long: [false; SWITCHES_MAX],
             long: [0; SWITCHES_MAX],
+	    long_specifies_max: [false; SWITCHES_MAX],
             //            double_open: double_duration,
             long_closed: long_duration,
             switches_state: SwitchesState::None,
@@ -257,7 +268,7 @@ impl MomentaryController {
     }
 
     /// Modify an already-added switch to control another output via long-press.
-    pub fn augment_switch_longpress(
+    pub fn augment_switch_longpress_add_output(
         &mut self,
         switch_idx: usize,
         output_cycle: u8,
@@ -276,6 +287,24 @@ impl MomentaryController {
         self.has_long[switch_idx] = true;
         self.long[switch_idx] = output_idx;
         (switch_idx, output_idx)
+    }
+
+    /// Modify an already-added switch to jump an output to its numerically-highest level on long-press.
+    pub fn augment_switch_longpress_max_output(
+	&mut self,
+	switch_idx: usize,
+	output_idx: usize,
+    ) -> (usize, usize) {
+	if self.started {
+	    panic!("Don't augment switches after first .report()");
+	}
+	if switch_idx >= self.switches {
+	    panic!("Don't specify long-press for a switch that has not yet been added");
+	}
+	self.has_long[switch_idx] = true;
+	self.long[switch_idx] = output_idx;
+	self.long_specifies_max[switch_idx] = true;
+	(switch_idx, output_idx)
     }
 
     pub fn report(&mut self, incoming: [bool; SWITCHES_MAX]) -> ([u8; OUTPUTS_MAX], SwitchesState) {

@@ -2,6 +2,7 @@
 #![no_main]
 
 use embassy_executor::{Spawner, task};
+use embassy_futures::select::{select, Either};
 use embassy_rp::Peri;
 use embassy_rp::gpio::{AnyPin, Input, Level, Output, Pull};
 use embassy_rp::pwm::{Config, Pwm, PwmOutput, SetDutyCycle};
@@ -91,6 +92,7 @@ struct SwitchStateReport {
 /// Entry point
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    defmt::trace!("main()");
     let p = embassy_rp::init(Default::default());
 
     // State machine tells which outputs are on as inputs change.
@@ -126,8 +128,11 @@ async fn main(spawner: Spawner) {
     defmt::assert!(out2_idx == 2, "Unexpected index for out2: {}", out2_idx);
 
     // Fourth control: long-press of sw0 toggles out3
-    let (_, out3_idx) = switch_controller.augment_switch_longpress(sw0_idx, 2, 0);
+    let (_, out3_idx) = switch_controller.augment_switch_longpress_add_output(sw0_idx, 2, 0);
     defmt::assert!(out3_idx == 3, "Unexpected index for out3: {}", out3_idx);
+
+    // Fifth control: long-press of sw2 jumps out2, grip heat, to HIGH.
+    let (_, _) = switch_controller.augment_switch_longpress_max_output(sw2_idx, out2_idx);
 
     // Four driven outputs (to gate of N-channel FETs). 0, 1 and 3 are binary.
     let mut out0 = Output::new(p.PIN_16, Level::Low);
@@ -202,10 +207,16 @@ async fn main(spawner: Spawner) {
     let indicator_sender = INDICATOR_CHANNEL.sender();
     let mut ins: [bool; SWITCHES_MAX] = [false; SWITCHES_MAX];
     loop {
-        let notice = switches_receiver.receive().await;
-        ins[notice.swhich] = notice.level == Level::High;
         let (outs, switches_state) = switch_controller.report(ins);
 
+        indicator_sender
+            .send(SystemStateUpdate {
+                _ins: ins,
+                outs,
+                _switches_state: switches_state,
+            })
+            .await;  // queuing only - not waiting for receipt.
+	
         // Reflect intent to outputs (set-same doesn't affect the output state)
         out0.set_level(if outs[0] != 0 {
             Level::High
@@ -227,13 +238,25 @@ async fn main(spawner: Spawner) {
             Level::Low
         });
 
-        indicator_sender
-            .send(SystemStateUpdate {
-                _ins: ins,
-                outs,
-                _switches_state: switches_state,
-            })
-            .await;
+	match switches_state {
+	    SwitchesState::None => {
+		let notice = switches_receiver.receive().await;
+		ins[notice.swhich] = notice.level == Level::High;
+	    },  // wait for next press
+	    _ => {
+		// Impatient mode: wait only 20mS for next press/release.
+	        // Otherwise we miss transition from One to Long.
+		match select(
+		    switches_receiver.receive(),
+		    Timer::after(Duration::from_millis(20)),
+		).await {
+		    Either::First(notice) => { ins[notice.swhich] = notice.level == Level::High; },
+		    _ => (),
+		};
+	    },
+        };
+
+	// And around the loop. Processing switch notices is at the top to establish initial conditions.
     }
 }
 
