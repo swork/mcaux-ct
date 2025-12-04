@@ -18,12 +18,6 @@ use momentary::{MomentaryController, OUTPUTS_MAX, SWITCHES_MAX, SwitchesState};
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-    // Example stuff:
-    label: String,
-
-    #[serde(skip)] // This how you opt-out of serialization of a field
-    value: f32,
-
     #[serde(skip)]
     switch_isclosed: [bool; SWITCHES_MAX],
     #[serde(skip)]
@@ -47,9 +41,6 @@ pub struct TemplateApp {
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
-            // Example stuff:
-            label: "Hello moto world!".to_owned(),
-            value: 2.7,
             switch_isclosed: [false; SWITCHES_MAX],
             switch_state: SwitchesState::None,
             output: [0; OUTPUTS_MAX],
@@ -77,13 +68,18 @@ impl TemplateApp {
             Default::default()
         };
 
-        let (sw0_idx, _out0_idx) = app.controller.add_switch(2, 1);
+        let (sw0_idx, out0_idx) = app.controller.add_switch(2, 1);
         let (sw1_idx, _out1_idx) = app.controller.add_switch(2, 0);
         let (sw2_idx, out2_idx) = app.controller.add_switch(5, 0);
-        let (_sw_l_idx, _out_l_idx) = app.controller.augment_switch_longpress_add_output(sw0_idx, 2, 0);
+        let (sw3_idx, out3_idx) = app.controller.add_switch_momentary();
+        let (_sw_l_idx, _out_l_idx) = app
+            .controller
+            .augment_switch_longpress_add_output(sw0_idx, 2, 0);
         assert!(sw0_idx == 0 && sw1_idx == 1 && sw2_idx == 2);
 
-	let (_, _) = app.controller.augment_switch_longpress_max_output(sw2_idx, out2_idx);
+        let (_, _) = app
+            .controller
+            .augment_switch_longpress_max_output(sw2_idx, out2_idx);
 
         app
     }
@@ -216,20 +212,35 @@ impl eframe::App for TemplateApp {
                     self.switch_isclosed[i] = !self.switch_isclosed[i];
                 }
             }
-            (self.output, self.switch_state) = self.controller.report(self.switch_isclosed);
             ctx.request_repaint_after(Duration::from_millis(99)); // roughly 10fps
+
+            // high beam switch
+            ui.heading("High beam switch");
+
+            // Display the checkbox and bind its state to a boolean
+            ui.checkbox(&mut self.switch_isclosed[3], "High if checked");
+
+            // Display a message based on the checkbox's state
+            if self.switch_isclosed[3] {
+                ui.label("High");
+            } else {
+                ui.label("Low");
+            }
+
+            // Calc outputs and state for next cycle
+            (self.output, self.switch_state) = self.controller.report(self.switch_isclosed);
 
             // Debug info
             ui.separator();
             ui.label(format!("switch controller state: {:?}", self.switch_state));
             ui.label(format!(
                 "switches: {:?}",
-                self.switch_isclosed[0..=2]
+                self.switch_isclosed[0..=3]
                     .iter()
                     .map(|x| if *x { 1 } else { 0 })
                     .collect::<Vec<u8>>()
             ));
-            ui.label(format!("outputs: {:?}", &self.output[0..=3]));
+            ui.label(format!("outputs: {:?}", &self.output[0..=4]));
             ui.separator();
 
             for i in 0..3 {
@@ -238,6 +249,12 @@ impl eframe::App for TemplateApp {
                     ui.label(format!("out{}: {}", i, self.output[i]));
                 });
             }
+            ui.horizontal(|ui| {
+                ui.label(format!(
+                    "     out3: {}  out4: {}",
+                    self.output[3], self.output[4]
+                ));
+            });
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 powered_by_egui_and_eframe(ui);

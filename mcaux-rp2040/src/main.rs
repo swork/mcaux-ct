@@ -1,8 +1,9 @@
 #![no_std]
 #![no_main]
 
+use defmt_rtt as _;
 use embassy_executor::{Spawner, task};
-use embassy_futures::select::{select, Either};
+use embassy_futures::select::{Either, select};
 use embassy_rp::Peri;
 use embassy_rp::gpio::{AnyPin, Input, Level, Output, Pull};
 use embassy_rp::pwm::{Config, Pwm, PwmOutput, SetDutyCycle};
@@ -12,8 +13,7 @@ use embassy_time::{Duration, Timer};
 use fixed::FixedU16;
 use fixed::types::extra::U4;
 use indicators::color_for_heat_level;
-use momentary::{MomentaryController, OUTPUTS_MAX, SWITCHES_MAX, SwitchesState};
-use {defmt_rtt as _}; //, panic_probe as _};
+use momentary::{MomentaryController, OUTPUTS_MAX, SWITCHES_MAX, SwitchesState}; //, panic_probe as _};
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
@@ -44,11 +44,43 @@ static INDICATOR_CHANNEL: Channel<
 static SWITCHES_CHANNEL: Channel<CriticalSectionRawMutex, SwitchStateReport, SWITCH_CHANNEL_DEPTH> =
     Channel::new();
 
+/// Switch index values, from MomentaryController's .add... functions
+/// These map to GPIO inputs (.usb and .gripheat have additional
+/// long-press functions, and highbeam tracks the actual headlight
+/// beam switch).
+#[derive(Copy, Clone, Debug, Default)]
+struct SwitchIdxs {
+    usb: usize,
+    auxlights: usize,
+    gripheat: usize,
+    highbeam: usize,
+}
+
+/// Output index values, from MomentaryController's .add... functions
+/// These do NOT map directly to GPIO outputs - auxlights only come on
+/// when enabled AND highbeam is on.
+#[derive(Copy, Clone, Debug, Default)]
+struct OutputIdxs {
+    usb: usize,
+    auxlights: usize, // enable. AND with .highbeam for actual output state
+    gripheat: usize,
+    nav: usize,
+    highbeam: usize,
+}
+
+/// Collected index values from MomentaryController's
+/// .add... functions, for indexing into its inputs and reports.
+#[derive(Copy, Clone, Debug, Default)]
+struct Idx {
+    sw: SwitchIdxs,
+    out: OutputIdxs,
+}
+
 ///
 /// Debounced switch state reporter. No races here, I promise.
 /// Peek at embassy/examples/rp/bin/src/debounce.rs for a counterexample.
 ///
-#[task(pool_size = 3)]
+#[task(pool_size = 4)]
 async fn switch_state_reporter(idx: usize, pin: Peri<'static, AnyPin>) {
     let sender = SWITCHES_CHANNEL.dyn_sender();
     let mut switch = Input::new(pin, Pull::Down);
@@ -105,53 +137,60 @@ async fn main(spawner: Spawner) {
     // State machine tells which outputs are on as inputs change.
     // TODO Isn't this an Advisor, as we do the controlling in our loop?
     let mut switch_controller = MomentaryController::new(DOUBLE_PRESS, LONG_PRESS);
+    let mut idx: Idx = Default::default(); // collect idx values
 
-    // Three pushbuttons
-    let (sw0_idx, out0_idx) = switch_controller.add_switch(2, 1); // off/on
+    // Three pushbuttons and the high-beam follower
+    (idx.sw.usb, idx.out.usb) = switch_controller.add_switch(2, 1); // off/on
     spawner.spawn(
-        switch_state_reporter(sw0_idx, p.PIN_13.into())
-            .expect("spawn switch_state_reporter for sw0"),
-    );
-    // These asserts make it safe to hard-code references to individual switches
-    // below, rather than deferencing an array.
-    defmt::assert!(sw0_idx == 0, "Unexpected index for sw0: {}", sw0_idx);
-    defmt::assert!(out0_idx == 0, "Unexpected index for out0: {}", out0_idx);
-
-    let (sw1_idx, out1_idx) = switch_controller.add_switch(2, 0); // off/on
-    spawner.spawn(
-        switch_state_reporter(sw1_idx, p.PIN_14.into())
-            .expect("spawn switch_state_reporter for sw1"),
-    );
-    defmt::assert!(sw1_idx == 1, "Unexpected index for sw1: {}", sw1_idx);
-    defmt::assert!(out1_idx == 1, "Unexpected index for out1: {}", out1_idx);
-
-    let (sw2_idx, out2_idx) = switch_controller.add_switch(5, 0); // off/low/lowmid/highmid/high
-    spawner.spawn(
-        switch_state_reporter(sw2_idx, p.PIN_15.into())
-            .expect("spawn switch_state_reporter for sw2"),
+        switch_state_reporter(idx.sw.usb, p.PIN_12.into())
+            .expect("spawn switch_state_reporter for USB power on pin 12"),
     );
 
-    defmt::assert!(sw2_idx == 2, "Unexpected index for sw2: {}", sw2_idx);
-    defmt::assert!(out2_idx == 2, "Unexpected index for out2: {}", out2_idx);
+    (idx.sw.auxlights, idx.out.auxlights) = switch_controller.add_switch(2, 0); // off/on
+    spawner.spawn(
+        switch_state_reporter(idx.sw.auxlights, p.PIN_13.into())
+            .expect("spawn switch_state_reporter for auxlights on pin 13"),
+    );
 
-    // Fourth control: long-press of sw0 toggles out3
-    let (_, out3_idx) = switch_controller.augment_switch_longpress_add_output(sw0_idx, 2, 0);
-    defmt::assert!(out3_idx == 3, "Unexpected index for out3: {}", out3_idx);
+    (idx.sw.gripheat, idx.out.gripheat) = switch_controller.add_switch(5, 0); // off/low/lowmid/highmid/high
+    spawner.spawn(
+        switch_state_reporter(idx.sw.gripheat, p.PIN_14.into())
+            .expect("spawn switch_state_reporter for grip heat on pin 14"),
+    );
 
-    // Fifth control: long-press of sw2 jumps out2, grip heat, to HIGH.
-    let (_, _) = switch_controller.augment_switch_longpress_max_output(sw2_idx, out2_idx);
+    // Auxiliary lights only come on with high beams when enabled
+    (idx.sw.highbeam, idx.out.highbeam) = switch_controller.add_switch_momentary();
+    spawner.spawn(
+        switch_state_reporter(idx.sw.highbeam, p.PIN_15.into())
+            .expect("spawn switch_state_reporter for highbeam on pin 15"),
+    );
 
-    // Four driven outputs (to gate of N-channel FETs). 0, 1 and 3 are binary.
-    let mut out0 = Output::new(p.PIN_16, Level::Low);
-    let mut out1 = Output::new(p.PIN_17, Level::Low);
-    let mut out3 = Output::new(p.PIN_19, Level::Low);
+    // Fourth control: long-press of usb toggles nav
+    (_, idx.out.nav) = switch_controller.augment_switch_longpress_add_output(idx.sw.usb, 2, 0);
+
+    // Fifth control: long-press of gripheat jumps grip heat output to HIGH.
+    let (_, _) =
+        switch_controller.augment_switch_longpress_max_output(idx.sw.gripheat, idx.out.gripheat);
+
+    // Four driven outputs (to gate of N-channel FETs). These three are binary
+    let mut outio_usb = Output::new(p.PIN_16, Level::Low);
+    let mut outio_auxlights = Output::new(p.PIN_17, Level::Low);
+    let mut outio_nav = Output::new(p.PIN_19, Level::Low);
 
     // common to all PWM setups
     let clock_hz = embassy_rp::clocks::clk_sys_freq(); // 125 MHz std.
 
+    // Grip-heat, the fourth output, is PWM
+    let target_hz = 8u32;
+    let divider = 255u32; // 8.4 fractional
+    let period = (clock_hz / (target_hz * divider)) as u16 - 1; // 61_274
+    let mut grip_heat_pwm_config = Config::default();
+    grip_heat_pwm_config.top = period;
+    grip_heat_pwm_config.divider = FixedU16::<U4>::from_num(divider);
+    let mut outpwm_gripheat = Pwm::new_output_a(p.PWM_SLICE1, p.PIN_18, grip_heat_pwm_config);
+
     // Six PWM LEDs, one associated with each switch (but independent of switch state).
     let target_hz = 1000u32;
-    // let clock_freq = embassy_rp::clocks::clk_sys_freq(); // above
     let divider = 16u32;
     let period = (clock_hz / (target_hz * divider)) as u16 - 1;
     let mut c = Config::default();
@@ -162,7 +201,7 @@ async fn main(spawner: Spawner) {
     //  Pwm::new_output_a (or _b I bet) blows up. Dunno why. _ab and then split()
     // works, and retvals are PwmOutput. Seems like I'm missing something.
     // Try to avoid loner pins here, but out2 is TBD.
-   
+
     let pwm = Pwm::new_output_ab(p.PWM_SLICE2, p.PIN_4, p.PIN_5, c.clone());
     let (led0, led1) = pwm.split();
     let mut led0 = led0.expect("split slice2a");
@@ -186,25 +225,9 @@ async fn main(spawner: Spawner) {
     led3b.set_duty_cycle_percent(6).expect("sdc3b");
 
     spawner.spawn(
-        indicator_controller(
-	    led0,
-	    led1,
-            led2,
-            led3r,
-            led3g,
-            led3b,
-        )
-        .expect("spawn indicator_controller"),
+        indicator_controller(idx, led0, led1, led2, led3r, led3g, led3b)
+            .expect("spawn indicator_controller"),
     );
-
-    // Grip-heat PWM, output #2
-    let target_hz = 8u32;
-    let divider = 255u32;  // 8.4 fractional
-    let period = (clock_hz / (target_hz * divider)) as u16 - 1; // 61_274
-    let mut grip_heat_pwm_config = Config::default();
-    grip_heat_pwm_config.top = period;
-    grip_heat_pwm_config.divider = FixedU16::<U4>::from_num(divider);
-    let mut out2 = Pwm::new_output_a(p.PWM_SLICE1, p.PIN_18, grip_heat_pwm_config);
 
     let switches_receiver = SWITCHES_CHANNEL.dyn_receiver();
     let indicator_sender = INDICATOR_CHANNEL.sender();
@@ -218,47 +241,54 @@ async fn main(spawner: Spawner) {
                 outs,
                 _switches_state: switches_state,
             })
-            .await;  // queuing only - not waiting for receipt.
-	
+            .await; // queuing only - not waiting for receipt.
+
         // Reflect intent to outputs (set-same doesn't affect the output state)
-        out0.set_level(if outs[0] != 0 {
+        outio_usb.set_level(if outs[idx.out.usb] != 0 {
             Level::High
         } else {
             Level::Low
         });
-        out1.set_level(if outs[1] != 0 {
-            Level::High
-        } else {
-            Level::Low
-        });
-        out3.set_level(if outs[3] != 0 {
+        outio_auxlights.set_level(
+            if outs[idx.out.auxlights] != 0 && outs[idx.out.highbeam] != 0 {
+                Level::High
+            } else {
+                Level::Low
+            },
+        );
+        outio_nav.set_level(if outs[idx.out.nav] != 0 {
             Level::High
         } else {
             Level::Low
         });
 
-        out2.set_duty_cycle_percent(percent_for_grip_heat_value(outs[2]))
+        outpwm_gripheat
+            .set_duty_cycle_percent(percent_for_grip_heat_value(outs[idx.out.gripheat]))
             .expect("grip duty cycle");
-	
-	match switches_state {
-	    SwitchesState::None => {
-		let notice = switches_receiver.receive().await;
-		ins[notice.swhich] = notice.level == Level::High;
-	    },  // wait for next press
-	    _ => {
-		// Impatient mode: wait only 20mS for next press/release.
-	        // Otherwise we miss transition from One to Long.
-		match select(
-		    switches_receiver.receive(),
-		    Timer::after(Duration::from_millis(20)),
-		).await {
-		    Either::First(notice) => { ins[notice.swhich] = notice.level == Level::High; },
-		    _ => (),
-		};
-	    },
+
+        match switches_state {
+            SwitchesState::None => {
+                let notice = switches_receiver.receive().await;
+                ins[notice.swhich] = notice.level == Level::High;
+            } // wait for next press
+            _ => {
+                // Impatient mode: wait only 20mS for next press/release.
+                // Otherwise we miss transition from One to Long.
+                match select(
+                    switches_receiver.receive(),
+                    Timer::after(Duration::from_millis(20)),
+                )
+                .await
+                {
+                    Either::First(notice) => {
+                        ins[notice.swhich] = notice.level == Level::High;
+                    }
+                    _ => (),
+                };
+            }
         };
 
-	// And around the loop. Processing switch notices is at the top to establish initial conditions.
+        // And around the loop. Processing switch notices is at the top to establish initial conditions.
     }
 }
 
@@ -284,6 +314,7 @@ struct SystemStateUpdate {
 
 #[task]
 async fn indicator_controller(
+    idx: Idx,
     mut led0: PwmOutput<'static>,
     mut led1: PwmOutput<'static>,
     mut led2: PwmOutput<'static>,
@@ -311,17 +342,17 @@ async fn indicator_controller(
             None => (),
             Some(rep) => {
                 // Minimal:
-                if rep.outs[0] != 0 {
+                if rep.outs[idx.out.usb] != 0 {
                     led0.set_duty_cycle_percent(100).unwrap();
                 } else {
                     led0.set_duty_cycle_percent(0).unwrap();
                 }
-                if rep.outs[1] != 0 {
+                if rep.outs[idx.out.auxlights] != 0 {
                     led1.set_duty_cycle_percent(100).unwrap();
                 } else {
                     led1.set_duty_cycle_percent(0).unwrap();
                 }
-                if rep.outs[2] != 0 {
+                if rep.outs[idx.out.gripheat] != 0 {
                     led2.set_duty_cycle_percent(100).unwrap();
                     let rgb: [u8; 3] = color_for_heat_level(rep.outs[2]);
                     // scale full-range u8 to percent
