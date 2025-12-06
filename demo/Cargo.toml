@@ -26,6 +26,7 @@ log = "0.4.28"
 
 momentary = { path = "../momentary" }
 mcaux-indicators = { path = "../mcaux-indicators" }
+wasm-logger = "0.2.0"
 
 # native:
 [target.'cfg(not(any(target_os = "none", target_family = "wasm")))'.dependencies]

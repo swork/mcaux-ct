@@ -7,13 +7,21 @@ use embassy_time::Duration;
 use std::time::Duration;
 #[cfg(target_family = "wasm")]
 use web_time::Duration;
+#[cfg(not(any(target_os = "none", target_family = "wasm")))]
+use log::{trace, info, warn, error};
+#[cfg(target_os = "none")]
+use defmt::info;
+#[cfg(target_family = "wasm")]
+use log::info;
+#[cfg(target_family = "wasm")]
+use wasm_logger;
 
 use momentary::{SwitchOutputController, SwitchesState};
 
 /// A representation of indicator output specification: how indicators
 /// should present at this instant
 #[allow(unused)]
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct LedsSituation {
     pub usb: u16,
     pub auxlight: u16,
@@ -90,6 +98,8 @@ impl IndicatorController {
         self.duty.rgb_g = numerator.try_into().unwrap();
         let numerator: u16 = rgb[2] as u16 * self.duty_max.rgb_b / 256;
         self.duty.rgb_b = numerator.try_into().unwrap();
+
+	info!("duty: {:?}", self.duty);
 
         (Some(self.duty.clone()), None)
     }

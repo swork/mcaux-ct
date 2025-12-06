@@ -10,6 +10,7 @@ use egui::Pos2;
 use egui::Rect;
 use egui::Sense;
 use egui::Stroke;
+#[allow(unused_imports)]
 use log::info;
 
 use mcaux_indicators::IndicatorController;
@@ -24,7 +25,7 @@ impl Default for TemplateApp {
     fn default() -> TemplateApp {
         TemplateApp {
             generic_switch_controller: Default::default(),
-            indicators: IndicatorController::new(100, 100, 100, 100, 100, 100),
+            indicators: IndicatorController::new(255, 255, 255, 255, 255, 255),
         }
     }
 }
@@ -153,7 +154,6 @@ impl eframe::App for TemplateApp {
                     color: Color32::BLACK,
                 },
             );
-            info!("indicator rgb: {},{},{}", duty[3], duty[4], duty[5],);
 
             for (i, item) in switch_rects.iter().enumerate() {
                 let circle_center = Pos2 {
@@ -165,6 +165,7 @@ impl eframe::App for TemplateApp {
                 } else {
                     "open"
                 };
+
                 ui.painter().circle(
                     circle_center,
                     20.,
