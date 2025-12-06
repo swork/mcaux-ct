@@ -19,9 +19,6 @@ eframe = { version = "0.33.0", default-features = false, features = [
     "wayland",       # To support Linux (and CI)
     "x11",           # To support older Linux distributions (restores one of the default features)
 ] }
-
-# You only need serde if you want app persistence:
-serde = { version = "1.0.219", features = ["derive"] }
 log = "0.4.28"
 
 momentary = { path = "../momentary" }
@@ -37,5 +34,4 @@ wasm-bindgen-futures = "0.4.50"
 web-sys = "0.3.70"              # to access the DOM (to hide the loading text)
 web-time = "1.1.0"
 wasm-logger = "0.2.0"
-
 

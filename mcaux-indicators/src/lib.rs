@@ -14,8 +14,6 @@ use log::{trace, info, warn, error};
 use defmt::info;
 #[cfg(target_family = "wasm")]
 use log::info;
-#[cfg(target_family = "wasm")]
-use wasm_logger;
 
 use momentary::{SwitchOutputController, SwitchesState};
 
