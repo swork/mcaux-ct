@@ -8,6 +8,7 @@ use std::time::Duration;
 #[cfg(target_family = "wasm")]
 use web_time::Duration;
 #[cfg(not(any(target_os = "none", target_family = "wasm")))]
+#[allow(unused_imports)]
 use log::{trace, info, warn, error};
 #[cfg(target_os = "none")]
 use defmt::info;
