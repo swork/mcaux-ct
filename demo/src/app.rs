@@ -1,8 +1,8 @@
 #[cfg(not(target_family = "wasm"))]
 extern crate std;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
-#[cfg(target_arch = "wasm32")]
+#[cfg(target_family = "wasm")]
 use web_time::Duration;
 
 use egui::Color32;
@@ -230,7 +230,11 @@ impl eframe::App for TemplateApp {
             ));
             ui.label(format!(
                 "outputs: {:?}",
-                self.generic_switch_controller.output
+                self.generic_switch_controller
+		    .output
+		    .iter()
+		    .map(|x| x.value)
+		    .collect::<Vec<u8>>()
             ));
             ui.separator();
 
@@ -242,15 +246,15 @@ impl eframe::App for TemplateApp {
                     ));
                     ui.label(format!(
                         "out{}: {:?}",
-                        i, self.generic_switch_controller.output[i]
+                        i, self.generic_switch_controller.output[i].value
                     ));
                 });
             }
             ui.horizontal(|ui| {
                 ui.label(format!(
                     "     out3: {:?}  out4: {:?}",
-                    self.generic_switch_controller.output[3],
-                    self.generic_switch_controller.output[4]
+                    self.generic_switch_controller.output[3].value,
+                    self.generic_switch_controller.output[4].value,
                 ));
             });
 
