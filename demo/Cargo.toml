@@ -10,9 +10,6 @@ rust-version = "1.88"
 all-features = true
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
-[features]
-not-no-std = []
-
 [dependencies]
 egui = "0.33.0"
 eframe = { version = "0.33.0", default-features = false, features = [
@@ -27,18 +24,17 @@ eframe = { version = "0.33.0", default-features = false, features = [
 serde = { version = "1.0.219", features = ["derive"] }
 log = "0.4.28"
 
+momentary = { path = "../momentary" }
+mcaux-indicators = { path = "../mcaux-indicators" }
+
 # native:
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(not(any(target_os = "none", target_family = "wasm")))'.dependencies]
 env_logger = "0.11.8"
-momentary = { version = "0.1.0", path = "../momentary", features = ["not-no-std"] }
-indicators = { version = "0.1.0", path = "../mcaux-indicators" }
 
 # web:
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+[target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen-futures = "0.4.50"
 web-sys = "0.3.70"              # to access the DOM (to hide the loading text)
 web-time = "1.1.0"
-momentary = { version = "0.1.0", features = ["wasm"], path = "../momentary" }
-indicators = { version = "0.1.0", default-features = false, path = "../mcaux-indicators" }
 
 

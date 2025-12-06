@@ -3,11 +3,11 @@ name = "momentary"
 version = "0.1.0"
 edition = "2024"
 
-[features]
-not-no-std = []
-embassy = ["dep:embassy-time"]
-wasm = ["dep:web-time"]
+[target.'cfg(target_family = "wasm")'.dependencies]
+web-time = { version = "1.1.0" }
+
+[target.'cfg(target_os = "none")'.dependencies]
+embassy-time = { version = "0.5.0", path = "/home/steve/Code/Github/embassy/embassy-time", features = ["defmt", "defmt-timestamp-uptime"] }
 
 [dependencies]
-embassy-time = { version = "0.5.0", optional = true, path = "/home/steve/Code/Github/embassy/embassy-time", features = ["defmt", "defmt-timestamp-uptime"] }
-web-time = { version = "1.1.0", optional = true }
+heapless = "0.9.2"

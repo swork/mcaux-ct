@@ -12,8 +12,9 @@ use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Timer};
 use fixed::FixedU16;
 use fixed::types::extra::U4;
-use indicators::color_for_heat_level;
-use momentary::{MomentaryController, OUTPUTS_MAX, SWITCHES_MAX, SwitchesState}; //, panic_probe as _};
+use mcaux_indicators::{IndicatorController, LedsSituation};
+use momentary;
+use momentary::{AbstractInput, SwitchOutputController, SwitchesState};
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
@@ -38,42 +39,24 @@ const LONG_PRESS: Duration = Duration::from_millis(900);
 /// Channel for driving indicators, and its receiver
 static INDICATOR_CHANNEL: Channel<
     CriticalSectionRawMutex,
-    SystemStateUpdate,
+    Option<SwitchOutputController>,
     INDICATOR_CHANNEL_DEPTH,
 > = Channel::new();
-static SWITCHES_CHANNEL: Channel<CriticalSectionRawMutex, SwitchStateReport, SWITCH_CHANNEL_DEPTH> =
-    Channel::new();
 
-/// Switch index values, from MomentaryController's .add... functions
-/// These map to GPIO inputs (.usb and .gripheat have additional
-/// long-press functions, and highbeam tracks the actual headlight
-/// beam switch).
-#[derive(Copy, Clone, Debug, Default)]
-struct SwitchIdxs {
-    usb: usize,
-    auxlights: usize,
-    gripheat: usize,
-    highbeam: usize,
-}
+static SWITCHES_CHANNEL: Channel<
+    CriticalSectionRawMutex,
+    momentary::AbstractInput,
+    SWITCH_CHANNEL_DEPTH,
+> = Channel::new();
 
-/// Output index values, from MomentaryController's .add... functions
-/// These do NOT map directly to GPIO outputs - auxlights only come on
-/// when enabled AND highbeam is on.
-#[derive(Copy, Clone, Debug, Default)]
-struct OutputIdxs {
-    usb: usize,
-    auxlights: usize, // enable. AND with .highbeam for actual output state
-    gripheat: usize,
-    nav: usize,
-    highbeam: usize,
-}
-
-/// Collected index values from MomentaryController's
-/// .add... functions, for indexing into its inputs and reports.
-#[derive(Copy, Clone, Debug, Default)]
-struct Idx {
-    sw: SwitchIdxs,
-    out: OutputIdxs,
+/// The indicators hardware interfaces
+struct IndicatorsInstances {
+    usb: PwmOutput<'static>,
+    auxlight: PwmOutput<'static>,
+    gripheat: PwmOutput<'static>,
+    rgb_r: PwmOutput<'static>,
+    rgb_g: PwmOutput<'static>,
+    rgb_b: PwmOutput<'static>,
 }
 
 ///
@@ -81,7 +64,10 @@ struct Idx {
 /// Peek at embassy/examples/rp/bin/src/debounce.rs for a counterexample.
 ///
 #[task(pool_size = 4)]
-async fn switch_state_reporter(idx: usize, pin: Peri<'static, AnyPin>) {
+async fn switch_state_observer(
+    abstract_input: momentary::AbstractInput,
+    pin: Peri<'static, AnyPin>,
+) {
     let sender = SWITCHES_CHANNEL.dyn_sender();
     let mut switch = Input::new(pin, Pull::Down);
     let mut level = switch.get_level();
@@ -95,10 +81,7 @@ async fn switch_state_reporter(idx: usize, pin: Peri<'static, AnyPin>) {
                 if level == Level::Low {
                     continue; // bounced, don't send a message
                 } else {
-                    SwitchStateReport {
-                        level, // high
-                        swhich: idx,
-                    }
+                    AbstractInput::new(true, abstract_input)
                 }
             }
             Level::High => {
@@ -108,10 +91,7 @@ async fn switch_state_reporter(idx: usize, pin: Peri<'static, AnyPin>) {
                 if level == Level::High {
                     continue;
                 } else {
-                    SwitchStateReport {
-                        level, // low
-                        swhich: idx,
-                    }
+                    AbstractInput::new(false, abstract_input)
                 }
             }
         };
@@ -119,16 +99,9 @@ async fn switch_state_reporter(idx: usize, pin: Peri<'static, AnyPin>) {
     }
 }
 
-/// The messages sent by switch_state_reporter.
-#[derive(Clone, Copy)]
-struct SwitchStateReport {
-    /// GPIO Input level, Low for open/unpressed.
-    level: Level,
-    /// Which switch? (Are you a good switch, or a bad switch?)
-    swhich: usize,
-}
-
-/// Entry point
+/// Entry point. Initialize hardware and abstract state machines
+/// representing I/O elements and indicators, then loop mediating
+/// between them.
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
@@ -136,45 +109,45 @@ async fn main(spawner: Spawner) {
 
     // State machine tells which outputs are on as inputs change.
     // TODO Isn't this an Advisor, as we do the controlling in our loop?
-    let mut switch_controller = MomentaryController::new(DOUBLE_PRESS, LONG_PRESS);
-    let mut idx: Idx = Default::default(); // collect idx values
+    let mut switch_controller = SwitchOutputController::new(DOUBLE_PRESS, LONG_PRESS);
 
     // Three pushbuttons and the high-beam follower
-    (idx.sw.usb, idx.out.usb) = switch_controller.add_switch(2, 1); // off/on
+    let (sw_usb_i, out_usb_i) = switch_controller.add_switch("usb", 2, 1); // off/on
     spawner.spawn(
-        switch_state_reporter(idx.sw.usb, p.PIN_12.into())
-            .expect("spawn switch_state_reporter for USB power on pin 12"),
+        switch_state_observer(switch_controller.switch[sw_usb_i], p.PIN_12.into())
+            .expect("spawn switch_state_observer for USB power on pin 12"),
     );
 
-    (idx.sw.auxlights, idx.out.auxlights) = switch_controller.add_switch(2, 0); // off/on
+    let (sw_auxlight_i, out_auxlight_i) = switch_controller.add_switch("auxlight", 2, 0); // off/on
     spawner.spawn(
-        switch_state_reporter(idx.sw.auxlights, p.PIN_13.into())
-            .expect("spawn switch_state_reporter for auxlights on pin 13"),
+        switch_state_observer(switch_controller.switch[sw_auxlight_i], p.PIN_13.into())
+            .expect("spawn switch_state_observer for auxlights on pin 13"),
     );
 
-    (idx.sw.gripheat, idx.out.gripheat) = switch_controller.add_switch(5, 0); // off/low/lowmid/highmid/high
+    let (sw_gripheat_i, out_gripheat_i) = switch_controller.add_switch("gripheat", 5, 0); // off/low/lowmid/highmid/high
     spawner.spawn(
-        switch_state_reporter(idx.sw.gripheat, p.PIN_14.into())
-            .expect("spawn switch_state_reporter for grip heat on pin 14"),
+        switch_state_observer(switch_controller.switch[sw_gripheat_i], p.PIN_14.into())
+            .expect("spawn switch_state_observer for grip heat on pin 14"),
     );
 
     // Auxiliary lights only come on with high beams when enabled
-    (idx.sw.highbeam, idx.out.highbeam) = switch_controller.add_switch_momentary();
+    let (sw_highbeam_i, out_highbeam_i) = switch_controller.add_switch_momentary("highbeam");
     spawner.spawn(
-        switch_state_reporter(idx.sw.highbeam, p.PIN_15.into())
-            .expect("spawn switch_state_reporter for highbeam on pin 15"),
+        switch_state_observer(switch_controller.switch[sw_highbeam_i], p.PIN_15.into())
+            .expect("spawn switch_state_observer for highbeam on pin 15"),
     );
 
     // Fourth control: long-press of usb toggles nav
-    (_, idx.out.nav) = switch_controller.augment_switch_longpress_add_output(idx.sw.usb, 2, 0);
+    let (_, out_nav_i) =
+        switch_controller.augment_switch_longpress_add_output(sw_usb_i, "nav", 2, 0);
 
     // Fifth control: long-press of gripheat jumps grip heat output to HIGH.
-    let (_, _) =
-        switch_controller.augment_switch_longpress_max_output(idx.sw.gripheat, idx.out.gripheat);
+    let _sw_gripheat_i =
+        switch_controller.augment_switch_longpress_max_output(sw_gripheat_i, out_gripheat_i);
 
     // Four driven outputs (to gate of N-channel FETs). These three are binary
     let mut outio_usb = Output::new(p.PIN_16, Level::Low);
-    let mut outio_auxlights = Output::new(p.PIN_17, Level::Low);
+    let mut outio_auxlight = Output::new(p.PIN_17, Level::Low);
     let mut outio_nav = Output::new(p.PIN_19, Level::Low);
 
     // common to all PWM setups
@@ -195,6 +168,7 @@ async fn main(spawner: Spawner) {
     let period = (clock_hz / (target_hz * divider)) as u16 - 1;
     let mut c = Config::default();
     c.top = period;
+    assert_eq!(period, 7812); // MARK_THIS_LINE_FOR_BRIGHTNESS_LOOKUP
     c.divider = FixedU16::<U4>::from_num(divider);
     // PWM_SLICEx: see rp2040 datasheet section 4.5.2, table 515.
     //
@@ -204,73 +178,80 @@ async fn main(spawner: Spawner) {
 
     let pwm = Pwm::new_output_ab(p.PWM_SLICE2, p.PIN_4, p.PIN_5, c.clone());
     let (led0, led1) = pwm.split();
-    let mut led0 = led0.expect("split slice2a");
-    let mut led1 = led1.expect("split slice2b");
+    let led0 = led0.expect("split slice2a");
+    let led1 = led1.expect("split slice2b");
     c.invert_b = true;
     let pwm = Pwm::new_output_ab(p.PWM_SLICE3, p.PIN_6, p.PIN_7, c.clone());
     let (led2, led3r) = pwm.split();
-    let mut led2 = led2.expect("split slice3a");
-    let mut led3r = led3r.expect("split slice3b");
+    let led2 = led2.expect("split slice3a");
+    let led3r = led3r.expect("split slice3b");
     c.invert_a = true;
     let pwm = Pwm::new_output_ab(p.PWM_SLICE4, p.PIN_8, p.PIN_9, c.clone());
     let (led3g, led3b) = pwm.split();
-    let mut led3g = led3g.expect("split slice4a");
-    let mut led3b = led3b.expect("split slice4b");
+    let led3g = led3g.expect("split slice4a");
+    let led3b = led3b.expect("split slice4b");
 
-    led0.set_duty_cycle_percent(1).expect("sdc0");
-    led1.set_duty_cycle_percent(2).expect("sdc1");
-    led2.set_duty_cycle_percent(3).expect("sdc2");
-    led3r.set_duty_cycle_percent(4).expect("sdc3r");
-    led3g.set_duty_cycle_percent(5).expect("sdc3g");
-    led3b.set_duty_cycle_percent(6).expect("sdc3b");
+    let indicators = IndicatorsInstances {
+        usb: led0,
+        auxlight: led1,
+        gripheat: led2,
+        rgb_r: led3r,
+        rgb_g: led3g,
+        rgb_b: led3b,
+    };
+
+    let indicator_controller = IndicatorController::new(
+        indicators.usb.max_duty_cycle(),
+        indicators.auxlight.max_duty_cycle(),
+        indicators.gripheat.max_duty_cycle(),
+        indicators.rgb_r.max_duty_cycle(),
+        indicators.rgb_g.max_duty_cycle(),
+        indicators.rgb_b.max_duty_cycle(),
+    );
 
     spawner.spawn(
-        indicator_controller(idx, led0, led1, led2, led3r, led3g, led3b)
-            .expect("spawn indicator_controller"),
+        indicator_handler(indicators, indicator_controller).expect("spawn indicator_handler"),
     );
 
     let switches_receiver = SWITCHES_CHANNEL.dyn_receiver();
     let indicator_sender = INDICATOR_CHANNEL.sender();
-    let mut ins: [bool; SWITCHES_MAX] = [false; SWITCHES_MAX];
+
     loop {
-        let (outs, switches_state) = switch_controller.report(ins);
+        switch_controller.remap();
 
-        indicator_sender
-            .send(SystemStateUpdate {
-                _ins: ins,
-                outs,
-                _switches_state: switches_state,
-            })
-            .await; // queuing only - not waiting for receipt.
-
-        // Reflect intent to outputs (set-same doesn't affect the output state)
-        outio_usb.set_level(if outs[idx.out.usb] != 0 {
+        // Reflect model to output hardware
+        outio_usb.set_level(if switch_controller.output[out_usb_i].value != 0 {
             Level::High
         } else {
             Level::Low
         });
-        outio_auxlights.set_level(
-            if outs[idx.out.auxlights] != 0 && outs[idx.out.highbeam] != 0 {
+        outio_auxlight.set_level(
+            if switch_controller.output[out_auxlight_i].value != 0
+                && switch_controller.output[out_highbeam_i].value != 0
+            {
                 Level::High
             } else {
                 Level::Low
             },
         );
-        outio_nav.set_level(if outs[idx.out.nav] != 0 {
+        outio_nav.set_level(if switch_controller.output[out_nav_i].value != 0 {
             Level::High
         } else {
             Level::Low
         });
-
         outpwm_gripheat
-            .set_duty_cycle_percent(percent_for_grip_heat_value(outs[idx.out.gripheat]))
+            .set_duty_cycle_percent(percent_for_grip_heat_value(
+                switch_controller.output[out_gripheat_i].value,
+            ))
             .expect("grip duty cycle");
 
-        match switches_state {
-            SwitchesState::None => {
-                let notice = switches_receiver.receive().await;
-                ins[notice.swhich] = notice.level == Level::High;
-            } // wait for next press
+        // Update the indicators.
+        indicator_sender.send(Some(switch_controller.clone())).await;
+
+        // Get a switch state update from one of the hardware
+        // observers, or timeout without one
+        let abstract_input_update = match switch_controller.switches_state {
+            SwitchesState::None => switches_receiver.receive().await,
             _ => {
                 // Impatient mode: wait only 20mS for next press/release.
                 // Otherwise we miss transition from One to Long.
@@ -280,15 +261,17 @@ async fn main(spawner: Spawner) {
                 )
                 .await
                 {
-                    Either::First(notice) => {
-                        ins[notice.swhich] = notice.level == Level::High;
-                    }
-                    _ => (),
-                };
+                    Either::First(notice) => notice,
+                    _ => continue,
+                }
             }
         };
 
-        // And around the loop. Processing switch notices is at the top to establish initial conditions.
+        // Update the model with the new switch state
+        let isclosed = abstract_input_update.isclosed;
+        switch_controller.switch[abstract_input_update.idx].isclosed = isclosed;
+
+        // And around the loop. Processing switch changes is at the top to establish initial conditions.
     }
 }
 
@@ -303,24 +286,10 @@ fn percent_for_grip_heat_value(val: u8) -> u8 {
     }
 }
 
-enum AnimationState {}
-
-#[derive(Clone, Copy)]
-struct SystemStateUpdate {
-    _ins: [bool; SWITCHES_MAX],
-    outs: [u8; OUTPUTS_MAX],
-    _switches_state: SwitchesState,
-}
-
 #[task]
-async fn indicator_controller(
-    idx: Idx,
-    mut led0: PwmOutput<'static>,
-    mut led1: PwmOutput<'static>,
-    mut led2: PwmOutput<'static>,
-    mut led3r: PwmOutput<'static>,
-    mut led3g: PwmOutput<'static>,
-    mut led3b: PwmOutput<'static>,
+async fn indicator_handler(
+    mut indicators_instances: IndicatorsInstances,
+    mut indicator_controller: IndicatorController,
 ) {
     let receiver = INDICATOR_CHANNEL.dyn_receiver();
 
@@ -328,91 +297,88 @@ async fn indicator_controller(
     // then do what we're going to do then wait again. Otherwise, if
     // we're not animating something, we just wait for a message.
 
-    let _prev_report: Option<SystemStateUpdate> = None;
-    let animation: Option<AnimationState> = None;
+    let mut next_update: Option<Duration> = None;
+    let mut leds: Option<LedsSituation> = None;
     loop {
-        let report = if animation.is_some() {
-            // make animation changes, record new animation state
-            receiver.try_receive().ok()
-        } else {
-            Some(receiver.receive().await)
-        };
-
-        match report {
+        // set indicators
+        match leds {
             None => (),
-            Some(rep) => {
+            Some(situation) => {
                 // Minimal:
-                if rep.outs[idx.out.usb] != 0 {
-                    led0.set_duty_cycle_percent(100).unwrap();
-                } else {
-                    led0.set_duty_cycle_percent(0).unwrap();
-                }
-                if rep.outs[idx.out.auxlights] != 0 {
-                    led1.set_duty_cycle_percent(100).unwrap();
-                } else {
-                    led1.set_duty_cycle_percent(0).unwrap();
-                }
-                if rep.outs[idx.out.gripheat] != 0 {
-                    led2.set_duty_cycle_percent(100).unwrap();
-                    let rgb: [u8; 3] = color_for_heat_level(rep.outs[2]);
-                    // scale full-range u8 to percent
-                    let pct: u16 = rgb[0] as u16 * 100 / 256;
-                    led3r
-                        .set_duty_cycle_percent(pct.try_into().unwrap())
-                        .unwrap();
-                    let pct: u16 = rgb[1] as u16 * 100 / 256;
-                    led3g
-                        .set_duty_cycle_percent(pct.try_into().unwrap())
-                        .unwrap();
-                    let pct: u16 = rgb[2] as u16 * 100 / 256;
-                    led3b
-                        .set_duty_cycle_percent(pct.try_into().unwrap())
-                        .unwrap();
-                } else {
-                    led2.set_duty_cycle_percent(0).unwrap();
-                    led3r.set_duty_cycle_percent(0).unwrap();
-                    led3g.set_duty_cycle_percent(0).unwrap();
-                    led3b.set_duty_cycle_percent(0).unwrap();
-                }
-
-                // TODO:
-                // If no button was down in the previous report
-                // and no button is down in the current report
-                // make no changes - continue animation in progress, or go to None.
-
-                // If no button was down in the previous report and a button
-                // is down now and the report's SwitchesState is One start
-                // AnimationOne (all rings drop quickly from current state to
-                // zero then quickly come on full, then all fade toward
-                // corresponding output state; and if the one down has a
-                // long-press capability, fade all back up as the long-press
-                // threshold approaches).
-
-                // If a button was down in the previous report
-                // and that same button is still down
-                // and the report's SwitchesState is One
-                // make no changes - continue animation.
-
-                // If a button was down in the previous report and the same
-                // button is now up and the previous report's SwitchesState was
-                // One and the current report's SwitchesState is None begin
-                // AnimationNone from current levels: fade all toward output
-                // state indication, wait a few seconds, then dim the bright
-                // ones to their resting On levels.
-
-                // If a button was down in the previous report and the state
-                // was One, and the same button is still down and the state is
-                // now Long, begin AnimationLong (all rings hard-blink several
-                // times quickly, then all but the down button go immediately
-                // to their dimmed resting state; the down button continues to
-                // blink quickly on the same cadence indefinitely)
-
-                // If a button was down previously and the state was Long and
-                // that button is now up and the state is None, continue
-                // blinking the button's ring on the same cadence for one more
-                // second, then end by immediately putting that ring into the
-                // dimmed resting state corresponding to its primary output.
+                indicators_instances
+                    .usb
+                    .set_duty_cycle(situation.usb)
+                    .unwrap();
+                indicators_instances
+                    .auxlight
+                    .set_duty_cycle(situation.auxlight)
+                    .unwrap();
+                indicators_instances
+                    .gripheat
+                    .set_duty_cycle(situation.gripheat)
+                    .unwrap();
+                indicators_instances
+                    .rgb_r
+                    .set_duty_cycle(situation.rgb_r)
+                    .unwrap();
+                indicators_instances
+                    .rgb_g
+                    .set_duty_cycle(situation.rgb_g)
+                    .unwrap();
+                indicators_instances
+                    .rgb_b
+                    .set_duty_cycle(situation.rgb_b)
+                    .unwrap();
             }
         }
+
+        (leds, next_update) = match next_update {
+            None => {
+                let switch_situation = receiver.receive().await;
+                indicator_controller.cycle(switch_situation)
+            }
+            Some(when) => match select(Timer::after(when), receiver.receive()).await {
+                Either::First(_) => indicator_controller.cycle(None),
+                Either::Second(switch_situation) => indicator_controller.cycle(switch_situation),
+            },
+        };
     }
 }
+
+// TODO:
+// If no button was down in the previous report
+// and no button is down in the current report
+// make no changes - continue animation in progress, or go to None.
+
+// If no button was down in the previous report and a button
+// is down now and the report's SwitchesState is One start
+// AnimationOne (all rings drop quickly from current state to
+// zero then quickly come on full, then all fade toward
+// corresponding output state; and if the one down has a
+// long-press capability, fade all back up as the long-press
+// threshold approaches).
+
+// If a button was down in the previous report
+// and that same button is still down
+// and the report's SwitchesState is One
+// make no changes - continue animation.
+
+// If a button was down in the previous report and the same
+// button is now up and the previous report's SwitchesState was
+// One and the current report's SwitchesState is None begin
+// AnimationNone from current levels: fade all toward output
+// state indication, wait a few seconds, then dim the bright
+// ones to their resting On levels.
+
+// If a button was down in the previous report and the state
+// was One, and the same button is still down and the state is
+// now Long, begin AnimationLong (all rings hard-blink several
+// times quickly, then all but the down button go immediately
+// to their dimmed resting state; the down button continues to
+// blink quickly on the same cadence indefinitely)
+
+// If a button was down previously and the state was Long and
+// that button is now up and the state is None, continue
+// blinking the button's ring on the same cadence for one more
+// second, then end by immediately putting that ring into the
+// dimmed resting state corresponding to its primary output.

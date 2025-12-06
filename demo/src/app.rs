@@ -1,4 +1,4 @@
-#[cfg(feature = "not-no-std")]
+#[cfg(not(target_family = "wasm"))]
 extern crate std;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
@@ -12,75 +12,45 @@ use egui::Sense;
 use egui::Stroke;
 use log::info;
 
-use indicators::IndicatorController;
-use momentary::{MomentaryController, OUTPUTS_MAX, SWITCHES_MAX, SwitchesState};
+use mcaux_indicators::IndicatorController;
+use momentary::SwitchOutputController;
 
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-    #[serde(skip)]
-    switch_isclosed: [bool; SWITCHES_MAX],
-    #[serde(skip)]
-    output: [u8; OUTPUTS_MAX],
-    #[serde(skip)]
-    switch_state: SwitchesState,
-
-    // duty cycles are 0-100 inclusive, matching embassy_rp API
-    #[serde(skip)]
-    indicator_duty: [u8; 3],
-    #[serde(skip)]
-    rgb_duty: [u8; 3],
-
-    #[serde(skip)] // This how you opt-out of serialization of a field
-    controller: MomentaryController,
-
-    #[serde(skip)]
+    generic_switch_controller: SwitchOutputController,
     indicators: IndicatorController, // duty cycles for all indicators
 }
 
 impl Default for TemplateApp {
-    fn default() -> Self {
-        Self {
-            switch_isclosed: [false; SWITCHES_MAX],
-            switch_state: SwitchesState::None,
-            output: [0; OUTPUTS_MAX],
-
-            // 8-bit R, G, B values scaled 0-99
-            indicator_duty: [50, 50, 50],
-            rgb_duty: [35, 39, 43],
-            controller: Default::default(),
-            indicators: Default::default(),
+    fn default() -> TemplateApp {
+        TemplateApp {
+            generic_switch_controller: Default::default(),
+            indicators: IndicatorController::new(100, 100, 100, 100, 100, 100),
         }
     }
 }
 
 impl TemplateApp {
     /// Called once before the first frame.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
-        // Load previous app state (if any).
-        // Note that you must enable the `persistence` feature for this to work.
-        let mut app: TemplateApp = if let Some(storage) = cc.storage {
-            eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
-        } else {
-            Default::default()
-        };
+        let mut app: TemplateApp = Default::default();
 
-        let (sw0_idx, out0_idx) = app.controller.add_switch(2, 1);
-        let (sw1_idx, _out1_idx) = app.controller.add_switch(2, 0);
-        let (sw2_idx, out2_idx) = app.controller.add_switch(5, 0);
-        let (sw3_idx, out3_idx) = app.controller.add_switch_momentary();
-        let (_sw_l_idx, _out_l_idx) = app
-            .controller
-            .augment_switch_longpress_add_output(sw0_idx, 2, 0);
-        assert!(sw0_idx == 0 && sw1_idx == 1 && sw2_idx == 2);
-
-        let (_, _) = app
-            .controller
-            .augment_switch_longpress_max_output(sw2_idx, out2_idx);
-
+        let (sw0, out0) = app.generic_switch_controller.add_switch("usb", 2, 1);
+        let (sw1, out1) = app.generic_switch_controller.add_switch("auxlight", 2, 0);
+        let (sw2, out2) = app.generic_switch_controller.add_switch("gripheat", 5, 0);
+        let (sw3, out3) = app
+            .generic_switch_controller
+            .add_switch_momentary("highbeam");
+        let (sw0, out4) = app
+            .generic_switch_controller
+            .augment_switch_longpress_add_output(sw0, "nav", 2, 0);
+        let sw2 = app
+            .generic_switch_controller
+            .augment_switch_longpress_max_output(sw2, out2);
+        assert!(sw0 == 0 && sw1 == 1 && sw2 == 2 && sw3 == 3);
+        assert!(out0 == 0 && out1 == 1 && out2 == 2 && out3 == 3 && out4 == 4);
         app
     }
 }
@@ -105,26 +75,16 @@ impl eframe::App for TemplateApp {
         // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
         // For inspiration and more examples, go to https://emilk.github.io/egui
 
-        [
-            self.indicator_duty[0],
-            self.indicator_duty[1],
-            self.indicator_duty[2],
-            self.rgb_duty[0],
-            self.rgb_duty[1],
-            self.rgb_duty[2],
-        ] = self.indicators.get_duty_cycles(
-            [
-                self.switch_isclosed[0],
-                self.switch_isclosed[1],
-                self.switch_isclosed[2],
-            ],
-            [
-                self.output[0],
-                self.output[1],
-                self.output[2],
-                self.output[3],
-            ],
-        );
+        // Calc outputs and state for next cycle.
+        self.generic_switch_controller.remap();
+
+        // leds:None means no changes, but we ignore that so pull
+        // LedsSItuation straight from self.indicators.duty.
+        // next:None means no animation; we do quicken our pace of
+        // refresh if this is set and short.
+        let (_leds, next_cycle) = self
+            .indicators
+            .cycle(Some(self.generic_switch_controller.clone()));
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
@@ -169,27 +129,38 @@ impl eframe::App for TemplateApp {
                 },
             ];
 
+            // save some typing
+            let duty: [u16; 6] = [
+                self.indicators.duty.usb,
+                self.indicators.duty.auxlight,
+                self.indicators.duty.gripheat,
+                self.indicators.duty.rgb_r,
+                self.indicators.duty.rgb_g,
+                self.indicators.duty.rgb_b,
+            ];
+
             let indicator_center = Pos2 { x: 142., y: 100. };
             ui.painter().circle(
                 indicator_center,
                 10.,
-                Color32::from_rgb(self.rgb_duty[0], self.rgb_duty[1], self.rgb_duty[2]),
+                Color32::from_rgb(
+                    duty[3].try_into().unwrap(),
+                    duty[4].try_into().unwrap(),
+                    duty[5].try_into().unwrap(),
+                ),
                 Stroke {
                     width: 2.,
                     color: Color32::BLACK,
                 },
             );
-            info!(
-                "indicator rgb: {},{},{}",
-                self.rgb_duty[0], self.rgb_duty[1], self.rgb_duty[2]
-            );
+            info!("indicator rgb: {},{},{}", duty[3], duty[4], duty[5],);
 
             for (i, item) in switch_rects.iter().enumerate() {
                 let circle_center = Pos2 {
                     x: ((item.max.x - item.min.x) / 2.) + item.min.x,
                     y: ((item.max.y - item.min.y) / 2.) + item.min.y,
                 };
-                let circle_text = if self.switch_isclosed[i] {
+                let circle_text = if self.generic_switch_controller.switch[i].isclosed {
                     "closed"
                 } else {
                     "open"
@@ -200,7 +171,7 @@ impl eframe::App for TemplateApp {
                     Color32::from_rgb(255, 255, 255),
                     Stroke {
                         width: 4.,
-                        color: screen_color_for_switch_and_duty(i, self.indicator_duty[i]),
+                        color: screen_color_for_switch_and_duty(i, duty[i].try_into().unwrap()),
                     },
                 );
                 ui.put(*item, egui::Label::new(circle_text));
@@ -209,50 +180,71 @@ impl eframe::App for TemplateApp {
                     .interact(*item, egui::Id::new(id_text), Sense::click())
                     .clicked()
                 {
-                    self.switch_isclosed[i] = !self.switch_isclosed[i];
+                    self.generic_switch_controller.switch[i].isclosed =
+                        !self.generic_switch_controller.switch[i].isclosed;
                 }
             }
-            ctx.request_repaint_after(Duration::from_millis(99)); // roughly 10fps
+
+            // this can condition on needs of animations and whether a switch is closed
+            let mut repaint_duration: Duration = Duration::from_millis(99);
+            if let Some(to_next_animation_cycle) = next_cycle {
+                repaint_duration = to_next_animation_cycle;
+            }
+            ctx.request_repaint_after(repaint_duration);
 
             // high beam switch
             ui.heading("High beam switch");
 
             // Display the checkbox and bind its state to a boolean
-            ui.checkbox(&mut self.switch_isclosed[3], "High if checked");
+            ui.checkbox(
+                &mut self.generic_switch_controller.switch[3].isclosed,
+                "High if checked",
+            );
 
             // Display a message based on the checkbox's state
-            if self.switch_isclosed[3] {
+            if self.generic_switch_controller.switch[3].isclosed {
                 ui.label("High");
             } else {
                 ui.label("Low");
             }
 
-            // Calc outputs and state for next cycle
-            (self.output, self.switch_state) = self.controller.report(self.switch_isclosed);
-
             // Debug info
             ui.separator();
-            ui.label(format!("switch controller state: {:?}", self.switch_state));
+            ui.label(format!(
+                "switches state: {:?}",
+                self.generic_switch_controller.switches_state
+            ));
             ui.label(format!(
                 "switches: {:?}",
-                self.switch_isclosed[0..=3]
+                self.generic_switch_controller
+                    .switch
                     .iter()
-                    .map(|x| if *x { 1 } else { 0 })
+                    .map(|x| if x.isclosed { 1 } else { 0 })
                     .collect::<Vec<u8>>()
             ));
-            ui.label(format!("outputs: {:?}", &self.output[0..=4]));
+            ui.label(format!(
+                "outputs: {:?}",
+                self.generic_switch_controller.output
+            ));
             ui.separator();
 
             for i in 0..3 {
                 ui.horizontal(|ui| {
-                    ui.label(format!("sw{}: {}", i, self.switch_isclosed[i]));
-                    ui.label(format!("out{}: {}", i, self.output[i]));
+                    ui.label(format!(
+                        "sw{}: {}",
+                        i, self.generic_switch_controller.switch[i].isclosed
+                    ));
+                    ui.label(format!(
+                        "out{}: {:?}",
+                        i, self.generic_switch_controller.output[i]
+                    ));
                 });
             }
             ui.horizontal(|ui| {
                 ui.label(format!(
-                    "     out3: {}  out4: {}",
-                    self.output[3], self.output[4]
+                    "     out3: {:?}  out4: {:?}",
+                    self.generic_switch_controller.output[3],
+                    self.generic_switch_controller.output[4]
                 ));
             });
 
