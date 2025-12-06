@@ -26,7 +26,6 @@ log = "0.4.28"
 
 momentary = { path = "../momentary" }
 mcaux-indicators = { path = "../mcaux-indicators" }
-wasm-logger = "0.2.0"
 
 # native:
 [target.'cfg(not(any(target_os = "none", target_family = "wasm")))'.dependencies]
@@ -37,5 +36,6 @@ env_logger = "0.11.8"
 wasm-bindgen-futures = "0.4.50"
 web-sys = "0.3.70"              # to access the DOM (to hide the loading text)
 web-time = "1.1.0"
+wasm-logger = "0.2.0"
 
 
