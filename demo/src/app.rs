@@ -38,10 +38,10 @@ impl TemplateApp {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
-#[cfg(target_family = "wasm")]
-	wasm_logger::init(wasm_logger::Config::default());
+        #[cfg(target_family = "wasm")]
+        wasm_logger::init(wasm_logger::Config::default());
 
-	let mut app: TemplateApp = Default::default();
+        let mut app: TemplateApp = Default::default();
 
         let (sw0, out0) = app.generic_switch_controller.add_switch("usb", 2, 1);
         let (sw1, out1) = app.generic_switch_controller.add_switch("auxlight", 2, 0);

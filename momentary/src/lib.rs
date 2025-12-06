@@ -472,7 +472,7 @@ impl SwitchOutputController {
     }
 
     fn remap_from_long(&mut self) {
-        if ! self.switch.iter().any(|&x| x.isclosed) {
+        if !self.switch.iter().any(|&x| x.isclosed) {
             // End the long-press state, during which no other switch changes have any effect.
             self.switches_state = SwitchesState::None;
             self.state_detail = None;
