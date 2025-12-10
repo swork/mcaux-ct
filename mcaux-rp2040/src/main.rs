@@ -2,11 +2,15 @@
 #![no_main]
 
 use defmt_rtt as _;
+use defmt::{info, error};
 use embassy_executor::{Spawner, task};
 use embassy_futures::select::{Either, select};
+// use embassy_net::{Stack, StackResources, Config, dhcpv4::Dhcpv4Client};
 use embassy_rp::Peri;
 use embassy_rp::gpio::{AnyPin, Input, Level, Output, Pull};
-use embassy_rp::pwm::{Config, Pwm, PwmOutput, SetDutyCycle};
+use embassy_rp::uart;
+use embassy_rp::pwm;
+use embassy_rp::pwm::{Pwm, PwmOutput, SetDutyCycle};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Timer};
@@ -15,6 +19,7 @@ use fixed::types::extra::U4;
 use mcaux_indicators::{IndicatorController, LedsSituation};
 use momentary;
 use momentary::{AbstractInput, SwitchOutputController, SwitchesState};
+use static_cell::StaticCell;
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
@@ -104,8 +109,8 @@ async fn switch_state_observer(
 /// between them.
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    let p = embassy_rp::init(Default::default());
     defmt::trace!("Startup");
+    let p = embassy_rp::init(Default::default());
 
     // State machine tells which outputs are on as inputs change.
     // TODO Isn't this an Advisor, as we do the controlling in our loop?
@@ -157,7 +162,7 @@ async fn main(spawner: Spawner) {
     let target_hz = 8u32;
     let divider = 255u32; // 8.4 fractional
     let period = (clock_hz / (target_hz * divider)) as u16 - 1; // 61_274
-    let mut grip_heat_pwm_config = Config::default();
+    let mut grip_heat_pwm_config = pwm::Config::default();
     grip_heat_pwm_config.top = period;
     grip_heat_pwm_config.divider = FixedU16::<U4>::from_num(divider);
     let mut outpwm_gripheat = Pwm::new_output_a(p.PWM_SLICE1, p.PIN_18, grip_heat_pwm_config);
@@ -165,8 +170,15 @@ async fn main(spawner: Spawner) {
     // Six PWM LEDs, one associated with each switch (but independent of switch state).
     let target_hz = 1000u32;
     let divider = 16u32;
-    let period = (clock_hz / (target_hz * divider)) as u16 - 1;
-    let mut c = Config::default();
+
+    // Correctly we should subtract one, but this complicates math
+    // elsewhere. Leaving this number unadjusted puts our max duty
+    // cycle just below absolutely fully on, but we won't be using
+    // that value anyway (the LEDs don't look brighter at the highest
+    // settings).
+    let period = (clock_hz / (target_hz * divider)) as u16;
+    
+    let mut c = pwm::Config::default();
     c.top = period;
     assert_eq!(period, 7812); // MARK_THIS_LINE_FOR_BRIGHTNESS_LOOKUP
     c.divider = FixedU16::<U4>::from_num(divider);
