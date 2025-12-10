@@ -1,6 +1,7 @@
 #![no_std]
 #[cfg(not(any(target_os = "none", target_family = "wasm")))]
 extern crate std;
+#[allow(unused_imports)]
 #[cfg(target_os = "none")]
 use defmt::info;
 #[cfg(target_os = "none")]
@@ -31,7 +32,7 @@ pub struct LedsSituation {
 }
 
 #[allow(unused)]
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct IndicatorController {
     duty_max: LedsSituation,
     pub duty: LedsSituation,
@@ -91,14 +92,12 @@ impl IndicatorController {
 
         // Fix these up from 8-bit RGB numbers
         let rgb = color_for_heat_level(model.output[model.oidx("gripheat")].value);
-        let numerator: u16 = rgb[0] as u16 * self.duty_max.rgb_r / 256;
+        let numerator = rgb[0] as u32 * self.duty_max.rgb_r as u32 / 256u32;
         self.duty.rgb_r = numerator.try_into().unwrap();
-        let numerator: u16 = rgb[1] as u16 * self.duty_max.rgb_g / 256;
+        let numerator = rgb[1] as u32 * self.duty_max.rgb_g as u32 / 256u32;
         self.duty.rgb_g = numerator.try_into().unwrap();
-        let numerator: u16 = rgb[2] as u16 * self.duty_max.rgb_b / 256;
-        self.duty.rgb_b = numerator.try_into().unwrap();
-
-        info!("duty: {:?}", self.duty);
+        let numerator = rgb[2] as u32 * self.duty_max.rgb_b as u32 / 256u32;
+        self.duty.rgb_b = numerator.try_into().expect("duty can't overflow here");
 
         (Some(self.duty.clone()), None)
     }
