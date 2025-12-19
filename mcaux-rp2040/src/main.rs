@@ -1,23 +1,21 @@
 #![no_std]
 #![no_main]
 
-use defmt_rtt as _;
-use defmt::{info, error};
+use defmt_serial as _;
 use embassy_executor::{Spawner, task};
 use embassy_futures::select::{Either, select};
 // use embassy_net::{Stack, StackResources, Config, dhcpv4::Dhcpv4Client};
 use embassy_rp::Peri;
 use embassy_rp::gpio::{AnyPin, Input, Level, Output, Pull};
-use embassy_rp::uart;
 use embassy_rp::pwm;
 use embassy_rp::pwm::{Pwm, PwmOutput, SetDutyCycle};
+use embassy_rp::uart;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Timer};
 use fixed::FixedU16;
 use fixed::types::extra::U4;
 use mcaux_indicators::{IndicatorController, LedsSituation};
-use momentary;
 use momentary::{AbstractInput, SwitchOutputController, SwitchesState};
 use static_cell::StaticCell;
 
@@ -50,7 +48,7 @@ static INDICATOR_CHANNEL: Channel<
 
 static SWITCHES_CHANNEL: Channel<
     CriticalSectionRawMutex,
-    momentary::AbstractInput,
+    AbstractInput,
     SWITCH_CHANNEL_DEPTH,
 > = Channel::new();
 
@@ -70,7 +68,7 @@ struct IndicatorsInstances {
 ///
 #[task(pool_size = 4)]
 async fn switch_state_observer(
-    abstract_input: momentary::AbstractInput,
+    abstract_input: AbstractInput,
     pin: Peri<'static, AnyPin>,
 ) {
     let sender = SWITCHES_CHANNEL.dyn_sender();
@@ -80,22 +78,28 @@ async fn switch_state_observer(
     loop {
         let message = match level {
             Level::Low => {
+                defmt::trace!("waiting for high");
                 switch.wait_for_high().await;
                 Timer::after(DEBOUNCE).await;
                 level = switch.get_level();
                 if level == Level::Low {
+                    defmt::trace!("nope, bounce");
                     continue; // bounced, don't send a message
                 } else {
+                    defmt::trace!("have high");
                     AbstractInput::new(true, abstract_input)
                 }
             }
             Level::High => {
+                defmt::trace!("waiting for low");
                 switch.wait_for_low().await;
                 Timer::after(DEBOUNCE).await;
                 level = switch.get_level();
                 if level == Level::High {
+                    defmt::trace!("nope, bounce");
                     continue;
                 } else {
+                    defmt::trace!("have low");
                     AbstractInput::new(false, abstract_input)
                 }
             }
@@ -109,8 +113,15 @@ async fn switch_state_observer(
 /// between them.
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    defmt::trace!("Startup");
     let p = embassy_rp::init(Default::default());
+
+    // serial trace output - sidestep unresolved RTT woes
+    let mut config = uart::Config::default();
+    config.baudrate = 38400; // default for my TTL/serial donglen
+    let mut uart = uart::Uart::new_blocking(p.UART0, p.PIN_0, p.PIN_1, config);
+    //    let result = defmt_serial::defmt_serial(SERIAL.init(uart));
+    defmt::warn!("Startup");
+    let _ = uart.blocking_write(b"!");
 
     // State machine tells which outputs are on as inputs change.
     // TODO Isn't this an Advisor, as we do the controlling in our loop?
@@ -177,7 +188,7 @@ async fn main(spawner: Spawner) {
     // that value anyway (the LEDs don't look brighter at the highest
     // settings).
     let period = (clock_hz / (target_hz * divider)) as u16;
-    
+
     let mut c = pwm::Config::default();
     c.top = period;
     assert_eq!(period, 7812); // MARK_THIS_LINE_FOR_BRIGHTNESS_LOOKUP
@@ -280,8 +291,9 @@ async fn main(spawner: Spawner) {
         };
 
         // Update the model with the new switch state
+        let idx = abstract_input_update.idx;
         let isclosed = abstract_input_update.isclosed;
-        switch_controller.switch[abstract_input_update.idx].isclosed = isclosed;
+        switch_controller.switch[idx].isclosed = isclosed;
 
         // And around the loop. Processing switch changes is at the top to establish initial conditions.
     }

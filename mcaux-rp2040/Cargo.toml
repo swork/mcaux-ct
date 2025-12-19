@@ -65,5 +65,6 @@ embedded-sdmmc = "0.7.0"
 momentary = { path = "../momentary" }
 mcaux-indicators = { path = "../mcaux-indicators" }
 defmt-rtt = "1.1.0"
+defmt-serial = "0.10.0"
 
 
