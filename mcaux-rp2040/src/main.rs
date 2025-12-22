@@ -203,12 +203,10 @@ async fn main(spawner: Spawner) {
     let (led0, led1) = pwm.split();
     let led0 = led0.expect("split slice2a");
     let led1 = led1.expect("split slice2b");
-    c.invert_b = true;
     let pwm = Pwm::new_output_ab(p.PWM_SLICE3, p.PIN_6, p.PIN_7, c.clone());
     let (led2, led3r) = pwm.split();
     let led2 = led2.expect("split slice3a");
     let led3r = led3r.expect("split slice3b");
-    c.invert_a = true;
     let pwm = Pwm::new_output_ab(p.PWM_SLICE4, p.PIN_8, p.PIN_9, c.clone());
     let (led3g, led3b) = pwm.split();
     let led3g = led3g.expect("split slice4a");
