@@ -4,7 +4,6 @@
 use defmt_serial as _;
 use embassy_executor::{Spawner, task};
 use embassy_futures::select::{Either, select};
-// use embassy_net::{Stack, StackResources, Config, dhcpv4::Dhcpv4Client};
 use embassy_rp::Peri;
 use embassy_rp::gpio::{AnyPin, Input, Level, Output, Pull};
 use embassy_rp::pwm;
@@ -17,7 +16,6 @@ use fixed::FixedU16;
 use fixed::types::extra::U4;
 use mcaux_indicators::{IndicatorController, LedsSituation};
 use momentary::{AbstractInput, SwitchOutputController, SwitchesState};
-use static_cell::StaticCell;
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
@@ -46,11 +44,8 @@ static INDICATOR_CHANNEL: Channel<
     INDICATOR_CHANNEL_DEPTH,
 > = Channel::new();
 
-static SWITCHES_CHANNEL: Channel<
-    CriticalSectionRawMutex,
-    AbstractInput,
-    SWITCH_CHANNEL_DEPTH,
-> = Channel::new();
+static SWITCHES_CHANNEL: Channel<CriticalSectionRawMutex, AbstractInput, SWITCH_CHANNEL_DEPTH> =
+    Channel::new();
 
 /// The indicators hardware interfaces
 struct IndicatorsInstances {
@@ -67,10 +62,7 @@ struct IndicatorsInstances {
 /// Peek at embassy/examples/rp/bin/src/debounce.rs for a counterexample.
 ///
 #[task(pool_size = 4)]
-async fn switch_state_observer(
-    abstract_input: AbstractInput,
-    pin: Peri<'static, AnyPin>,
-) {
+async fn switch_state_observer(abstract_input: AbstractInput, pin: Peri<'static, AnyPin>) -> ! {
     let sender = SWITCHES_CHANNEL.dyn_sender();
     let mut switch = Input::new(pin, Pull::Down);
     let mut level = switch.get_level();
@@ -129,29 +121,37 @@ async fn main(spawner: Spawner) {
 
     // Three pushbuttons and the high-beam follower
     let (sw_usb_i, out_usb_i) = switch_controller.add_switch("usb", 2, 1); // off/on
-    spawner.spawn(
-        switch_state_observer(switch_controller.switch[sw_usb_i], p.PIN_12.into())
-            .expect("spawn switch_state_observer for USB power on pin 12"),
-    );
+    spawner
+        .spawn(switch_state_observer(
+            switch_controller.switch[sw_usb_i],
+            p.PIN_12.into(),
+        ))
+        .expect("PIN_12 switch_state_observer");
 
     let (sw_auxlight_i, out_auxlight_i) = switch_controller.add_switch("auxlight", 2, 0); // off/on
-    spawner.spawn(
-        switch_state_observer(switch_controller.switch[sw_auxlight_i], p.PIN_13.into())
-            .expect("spawn switch_state_observer for auxlights on pin 13"),
-    );
+    spawner
+        .spawn(switch_state_observer(
+            switch_controller.switch[sw_auxlight_i],
+            p.PIN_13.into(),
+        ))
+        .expect("PIN_13 switch_state_observer");
 
     let (sw_gripheat_i, out_gripheat_i) = switch_controller.add_switch("gripheat", 5, 0); // off/low/lowmid/highmid/high
-    spawner.spawn(
-        switch_state_observer(switch_controller.switch[sw_gripheat_i], p.PIN_14.into())
-            .expect("spawn switch_state_observer for grip heat on pin 14"),
-    );
+    spawner
+        .spawn(switch_state_observer(
+            switch_controller.switch[sw_gripheat_i],
+            p.PIN_14.into(),
+        ))
+        .expect("PIN_14 switch_state_observer");
 
     // Auxiliary lights only come on with high beams when enabled
     let (sw_highbeam_i, out_highbeam_i) = switch_controller.add_switch_momentary("highbeam");
-    spawner.spawn(
-        switch_state_observer(switch_controller.switch[sw_highbeam_i], p.PIN_15.into())
-            .expect("spawn switch_state_observer for highbeam on pin 15"),
-    );
+    spawner
+        .spawn(switch_state_observer(
+            switch_controller.switch[sw_highbeam_i],
+            p.PIN_15.into(),
+        ))
+        .expect("PIN_15 switch_state_observer");
 
     // Fourth control: long-press of usb toggles nav
     let (_, out_nav_i) =
@@ -230,9 +230,9 @@ async fn main(spawner: Spawner) {
         indicators.rgb_b.max_duty_cycle(),
     );
 
-    spawner.spawn(
-        indicator_handler(indicators, indicator_controller).expect("spawn indicator_handler"),
-    );
+    spawner
+        .spawn(indicator_handler(indicators, indicator_controller))
+        .expect("spawn indicator handler");
 
     let switches_receiver = SWITCHES_CHANNEL.dyn_receiver();
     let indicator_sender = INDICATOR_CHANNEL.sender();
@@ -312,7 +312,7 @@ fn percent_for_grip_heat_value(val: u8) -> u8 {
 async fn indicator_handler(
     mut indicators_instances: IndicatorsInstances,
     mut indicator_controller: IndicatorController,
-) {
+) -> ! {
     let receiver = INDICATOR_CHANNEL.dyn_receiver();
 
     // Animated light changes happen at a sloppy 50Hz - we wait 1/50s
