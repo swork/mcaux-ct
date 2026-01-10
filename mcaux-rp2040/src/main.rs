@@ -1,14 +1,17 @@
 #![no_std]
 #![no_main]
 
-use defmt_serial as _;
+use cyw43_pio::{DEFAULT_CLOCK_DIVIDER, PioSpi};
+use defmt_rtt as _;
 use embassy_executor::{Spawner, task};
 use embassy_futures::select::{Either, select};
-use embassy_rp::Peri;
 use embassy_rp::gpio::{AnyPin, Input, Level, Output, Pull};
+use embassy_rp::peripherals::{DMA_CH0, PIO0};
+use embassy_rp::pio::{InterruptHandler, Pio};
 use embassy_rp::pwm;
 use embassy_rp::pwm::{Pwm, PwmOutput, SetDutyCycle};
 use embassy_rp::uart;
+use embassy_rp::{Peri, bind_interrupts};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Timer};
@@ -16,12 +19,26 @@ use fixed::FixedU16;
 use fixed::types::extra::U4;
 use mcaux_indicators::{IndicatorController, LedsSituation};
 use momentary::{AbstractInput, SwitchOutputController, SwitchesState};
+use static_cell::StaticCell; // panic_probe as _
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     defmt::error!("Panic occurred: {:?}", defmt::Display2Format(info));
     // whatever else to do
     loop {} // Halt the program
+}
+
+// from wifi_blinky, setup to twiddle the PicoW LED (and for that matter to use
+// the wifi subsystem at all)
+bind_interrupts!(struct Irqs {
+    PIO0_IRQ_0 => InterruptHandler<PIO0>;
+});
+
+#[embassy_executor::task]
+async fn cyw43_task(
+    runner: cyw43::Runner<'static, Output<'static>, PioSpi<'static, PIO0, 0, DMA_CH0>>,
+) -> ! {
+    runner.run().await
 }
 
 /// How many receive slots for inter-task Channels
@@ -106,6 +123,38 @@ async fn switch_state_observer(abstract_input: AbstractInput, pin: Peri<'static,
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
+
+    // More boilerplate wifi_blinky.rs setup...
+    // Move these to fixed sections in memory map, per wifi_blinky.rs
+    // to save space - can we get below about 800k?
+    let fw = include_bytes!("../../../../Github/embassy/cyw43-firmware/43439A0.bin");
+    let clm = include_bytes!("../../../../Github/embassy/cyw43-firmware/43439A0_clm.bin");
+
+    let pwr = Output::new(p.PIN_23, Level::Low);
+    let cs = Output::new(p.PIN_25, Level::High);
+    let mut pio = Pio::new(p.PIO0, Irqs);
+    let spi = PioSpi::new(
+        &mut pio.common,
+        pio.sm0,
+        DEFAULT_CLOCK_DIVIDER,
+        pio.irq0,
+        cs,
+        p.PIN_24,
+        p.PIN_29,
+        p.DMA_CH0,
+    );
+
+    static STATE: StaticCell<cyw43::State> = StaticCell::new();
+    let state = STATE.init(cyw43::State::new());
+    let (_net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw).await;
+    spawner.spawn(cyw43_task(runner)).expect("spawn cyw43_task");
+
+    control.init(clm).await;
+    control
+        .set_power_management(cyw43::PowerManagementMode::PowerSave)
+        .await;
+    blink(true, &mut control).await;
+    // ... end boilerplace wifi_blinky.rs setup
 
     // serial trace output - sidestep unresolved RTT woes
     let mut config = uart::Config::default();
@@ -268,11 +317,20 @@ async fn main(spawner: Spawner) {
 
         // Update the indicators.
         indicator_sender.send(Some(switch_controller.clone())).await;
+        blink(false, &mut control).await;
 
         // Get a switch state update from one of the hardware
         // observers, or timeout without one
         let abstract_input_update = match switch_controller.switches_state {
-            SwitchesState::None => switches_receiver.receive().await,
+            SwitchesState::None => {
+		match select(
+		    switches_receiver.receive(),
+		    Timer::after(Duration::from_millis(5000)),
+		).await {
+		    Either::First(notice) => Some(notice),
+		    _ => None,
+		}
+	    },
             _ => {
                 // Impatient mode: wait only 20mS for next press/release.
                 // Otherwise we miss transition from One to Long.
@@ -280,21 +338,33 @@ async fn main(spawner: Spawner) {
                     switches_receiver.receive(),
                     Timer::after(Duration::from_millis(20)),
                 )
-                .await
-                {
-                    Either::First(notice) => notice,
-                    _ => continue,
+                .await {
+                    Either::First(notice) => Some(notice),
+                    _ => None,
                 }
             }
         };
 
-        // Update the model with the new switch state
+	blink(true, &mut control).await;
+
+	// timeout case
+	if abstract_input_update.is_none() {
+	    continue;
+	}
+
+        // Else update the model with the new switch state
+	let abstract_input_update = abstract_input_update.unwrap();
         let idx = abstract_input_update.idx;
         let isclosed = abstract_input_update.isclosed;
         switch_controller.switch[idx].isclosed = isclosed;
 
-        // And around the loop. Processing switch changes is at the top to establish initial conditions.
+        // And around the loop. Processing switch changes is at the
+        // top to establish initial conditions.
     }
+}
+
+async fn blink(on_p: bool, control: &mut cyw43::Control<'_>) -> () {
+    control.gpio_set(0, on_p).await;
 }
 
 fn percent_for_grip_heat_value(val: u8) -> u8 {
