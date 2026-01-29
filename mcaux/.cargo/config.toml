@@ -1,0 +1,12 @@
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+runner = [ "arm-none-eabi-gdb","-iex","targ ext /dev/ttyACM0","-iex","mon swdp","-iex","att 1", "-iex","mon rtt", "-ex", "load" ]
+
+rustflags = [
+    "-C", "link-arg=-Tdefmt.x",
+]
+
+[build]
+target = "thumbv6m-none-eabi"
+
+[env]
+DEFMT_LOG = "debug"
