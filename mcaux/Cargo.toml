@@ -20,8 +20,6 @@ embassy-futures = "0.1.2"
 embassy-rp = { version = "0.9.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl"] }
 embassy-sync = { version = "0.7.2", features = ["defmt"] }
 embassy-time = { version = "0.5.0", features = ["defmt", "defmt-timestamp-uptime"] }
-embedded-hal = "1.0.0"
-embedded-hal-async = "1.0.0"
 fixed = "1.30.0"
 fixed-macro = "1.2.0"
 mcaux-indicators = { version = "0.1.0", path = "../mcaux-indicators" }
