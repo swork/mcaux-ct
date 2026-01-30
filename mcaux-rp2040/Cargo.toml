@@ -21,6 +21,7 @@ defmt = "1.0.1"
 cortex-m-rt = "0.7.5"
 mcaux = { version="0.1.0", path="../mcaux", features = ["rp2040"]}
 static_cell = "2.1.1"
-embassy-rp = { version = "0.9.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl"] }
+embassy-rp = { version = "0.9.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "binary-info"] }
+defmt-rtt = "1.1.0"
 
 

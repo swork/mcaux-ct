@@ -1,14 +1,13 @@
 #![no_std]
 #![no_main]
 
-use defmt_rtt as _;
+use assign_resources::assign_resources;
+use defmt::info;
 use embassy_executor::{Spawner, task};
 use embassy_futures::select::{Either, select};
-use embassy_rp::Peripherals;
+use embassy_rp::{Peri, peripherals, pwm };
 use embassy_rp::gpio::{Input, Level, Output, Pull};
-use embassy_rp::pwm;
 use embassy_rp::pwm::{Pwm, PwmOutput, SetDutyCycle};
-use embassy_rp::uart;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Timer};
@@ -114,15 +113,45 @@ async fn switch_state_observer(
     }
 }
 
+assign_resources! {
+    switching: SwitchingResources {
+        led_blinker: PIN_2,
+        pin_uart_tx: PIN_0,
+        pin_uart_rx: PIN_1,
+        uart: UART0,
+        sw_usb: PIN_20,
+        sw_aux: PIN_21,
+        sw_grp: PIN_22,
+        sw_hbm: PIN_26,
+        led_usb: PIN_4,
+        led_aux: PIN_5,
+        pwm_usb_aux: PWM_SLICE2,
+        led_grp: PIN_6,
+        led_r: PIN_7,
+        pwm_grp_r: PWM_SLICE3,
+        led_g: PIN_8,
+        led_b: PIN_9,
+        pwm_g_b: PWM_SLICE4,
+        out_usb: PIN_16,
+        out_aux: PIN_17,
+        out_grp: PIN_18,
+        out_nav: PIN_19,
+        pwm_outgrp: PWM_SLICE1,
+    }
+}
+
 // #[embassy_executor::task]
-pub async fn main_rp(spawner: Spawner, p: Peripherals) -> Peripherals {
+pub async fn main_rp(spawner: Spawner, p: SwitchingResources) -> () {
+    let mut blinker = Output::new(p.led_blinker, Level::High);
+
+/*
     // serial trace output - sidestep unresolved RTT woes
     let mut config = uart::Config::default();
     config.baudrate = 38400; // default for my TTL/serial donglen
-    let mut uart = uart::Uart::new_blocking(p.UART0, p.PIN_0, p.PIN_1, config);
+    let mut uart = uart::Uart::new_blocking(p.uart, p.pin_uart_tx, p.pin_uart_rx, config);
     //    let result = defmt_serial::defmt_serial(SERIAL.init(uart));
-    defmt::warn!("Startup");
     let _ = uart.blocking_write(b"!");
+*/
 
     // State machine tells which outputs are on as inputs change.
     // TODO Isn't this an Advisor, as we do the controlling in our loop?
@@ -133,38 +162,38 @@ pub async fn main_rp(spawner: Spawner, p: Peripherals) -> Peripherals {
     spawner
         .spawn(switch_state_observer(
             switch_controller.switch[sw_usb_i],
-            Input::new(p.PIN_20, Pull::Up),
+            Input::new(p.sw_usb, Pull::Up),
             Level::Low,
         ))
-        .expect("PIN_20 usb switch_state_observer ");
+        .expect("usb switch_state_observer ");
 
     let (sw_auxlight_i, out_auxlight_i) = switch_controller.add_switch("auxlight", 2, 0); // off/on
     spawner
         .spawn(switch_state_observer(
             switch_controller.switch[sw_auxlight_i],
-            Input::new(p.PIN_21, Pull::Up),
+            Input::new(p.sw_aux, Pull::Up),
             Level::Low,
         ))
-        .expect("PIN_21 auxlight switch_state_observer");
+        .expect("auxlight switch_state_observer");
 
     let (sw_gripheat_i, out_gripheat_i) = switch_controller.add_switch("gripheat", 5, 0); // off/low/lowmid/highmid/high
     spawner
         .spawn(switch_state_observer(
             switch_controller.switch[sw_gripheat_i],
-            Input::new(p.PIN_22, Pull::Up),
+            Input::new(p.sw_grp, Pull::Up),
             Level::Low,
         ))
-        .expect("PIN_22 grip switch_state_observer");
+        .expect("grip switch_state_observer");
 
     // Auxiliary lights only come on with high beams when enabled
     let (sw_highbeam_i, out_highbeam_i) = switch_controller.add_switch_momentary("highbeam");
     spawner
         .spawn(switch_state_observer(
             switch_controller.switch[sw_highbeam_i],
-            Input::new(p.PIN_26, Pull::Down),
+            Input::new(p.sw_hbm, Pull::Down),
             Level::High,
         ))
-        .expect("PIN_26 highbeam switch_state_observer");
+        .expect("highbeam switch_state_observer");
 
     // Fourth control: long-press of usb toggles nav
     let (_, out_nav_i) =
@@ -175,12 +204,12 @@ pub async fn main_rp(spawner: Spawner, p: Peripherals) -> Peripherals {
         switch_controller.augment_switch_longpress_max_output(sw_gripheat_i, out_gripheat_i);
 
     // Four driven outputs (to gate of N-channel FETs). These three are binary
-    let mut outio_usb = Output::new(p.PIN_16, Level::Low);
-    let mut outio_auxlight = Output::new(p.PIN_17, Level::Low);
-    let mut outio_nav = Output::new(p.PIN_19, Level::Low);
+    let mut outio_usb = Output::new(p.out_usb, Level::Low);
+    let mut outio_auxlight = Output::new(p.out_aux, Level::Low);
+    let mut outio_nav = Output::new(p.out_nav, Level::Low);
 
     // common to all PWM setups
-    let clock_hz = embassy_rp::clocks::clk_sys_freq(); // 125 MHz std.
+    let clock_hz = embassy_rp::clocks::clk_sys_freq();
 
     // Grip-heat, the fourth output, is PWM
     let target_hz = 8u32;
@@ -189,7 +218,7 @@ pub async fn main_rp(spawner: Spawner, p: Peripherals) -> Peripherals {
     let mut grip_heat_pwm_config = pwm::Config::default();
     grip_heat_pwm_config.top = period;
     grip_heat_pwm_config.divider = FixedU16::<U4>::from_num(divider);
-    let mut outpwm_gripheat = Pwm::new_output_a(p.PWM_SLICE1, p.PIN_18, grip_heat_pwm_config);
+    let mut outpwm_gripheat = Pwm::new_output_a(p.pwm_outgrp, p.out_grp, grip_heat_pwm_config);
 
     // Six PWM LEDs, one associated with each switch (but independent of switch state).
     let target_hz = 1000u32;
@@ -204,23 +233,19 @@ pub async fn main_rp(spawner: Spawner, p: Peripherals) -> Peripherals {
 
     let mut c = pwm::Config::default();
     c.top = period;
-    assert_eq!(period, 7812); // MARK_THIS_LINE_FOR_BRIGHTNESS_LOOKUP
-    c.divider = FixedU16::<U4>::from_num(divider);
-    // PWM_SLICEx: see rp2040 datasheet section 4.5.2, table 515.
-    //
-    //  Pwm::new_output_a (or _b I bet) blows up. Dunno why. _ab and then split()
-    // works, and retvals are PwmOutput. Seems like I'm missing something.
-    // Try to avoid loner pins here, but out2 is TBD.
 
-    let pwm = Pwm::new_output_ab(p.PWM_SLICE2, p.PIN_4, p.PIN_5, c.clone());
+    // assert_eq!(period, 7812); // MARK_THIS_LINE_FOR_BRIGHTNESS_LOOKUP
+    c.divider = FixedU16::<U4>::from_num(divider);
+
+    let pwm = Pwm::new_output_ab(p.pwm_usb_aux, p.led_usb, p.led_aux, c.clone());
     let (led0, led1) = pwm.split();
     let led0 = led0.expect("split slice2a");
     let led1 = led1.expect("split slice2b");
-    let pwm = Pwm::new_output_ab(p.PWM_SLICE3, p.PIN_6, p.PIN_7, c.clone());
+    let pwm = Pwm::new_output_ab(p.pwm_grp_r, p.led_grp, p.led_r, c.clone());
     let (led2, led3r) = pwm.split();
     let led2 = led2.expect("split slice3a");
     let led3r = led3r.expect("split slice3b");
-    let pwm = Pwm::new_output_ab(p.PWM_SLICE4, p.PIN_8, p.PIN_9, c.clone());
+    let pwm = Pwm::new_output_ab(p.pwm_g_b, p.led_g, p.led_b, c.clone());
     let (led3g, led3b) = pwm.split();
     let led3g = led3g.expect("split slice4a");
     let led3b = led3b.expect("split slice4b");
@@ -281,7 +306,7 @@ pub async fn main_rp(spawner: Spawner, p: Peripherals) -> Peripherals {
 
         // Update the indicators.
         indicator_sender.send(Some(switch_controller.clone())).await;
-        //blink(false, &mut control).await;
+        blinker.set_low();
 
         // Get a switch state update from one of the hardware
         // observers, or timeout without one
@@ -312,7 +337,7 @@ pub async fn main_rp(spawner: Spawner, p: Peripherals) -> Peripherals {
             }
         };
 
-        //blink(true, &mut control).await;
+        blinker.set_high();
 
         // timeout case
         if abstract_input_update.is_none() {
@@ -328,9 +353,6 @@ pub async fn main_rp(spawner: Spawner, p: Peripherals) -> Peripherals {
         // And around the loop. Processing switch changes is at the
         // top to establish initial conditions.
     }
-
-    #[allow(unreachable_code)]
-    p
 }
 
 fn percent_for_grip_heat_value(val: u8) -> u8 {
