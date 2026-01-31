@@ -276,6 +276,7 @@ pub async fn main_rp(spawner: Spawner, p: SwitchingResources) -> () {
     let indicator_sender = INDICATOR_CHANNEL.sender();
 
     loop {
+        info!("Top of loop");
         switch_controller.remap();
 
         // Reflect model to output hardware

@@ -48,9 +48,11 @@ async fn cyw43_task(
 /// between them.
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    info!("main");
     let p = embassy_rp::init(Default::default());
     let r = split_resources!(p);
     main_rp(spawner, r.switching).await; // "forever", but return for networking
+    info!("tail of main");
 
     // Move these to fixed sections in memory map, per wifi_blinky.rs
     // to save space
