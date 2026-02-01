@@ -183,7 +183,7 @@ pub async fn main_rp(spawner: Spawner, p: SwitchingResources) -> () {
             Input::new(p.sw_grp, Pull::Up),
             Level::Low,
         ))
-        .expect("grip switch_state_observer");
+        .expect("gripheat switch_state_observer");
 
     // Auxiliary lights only come on with high beams when enabled
     let (sw_highbeam_i, out_highbeam_i) = switch_controller.add_switch_momentary("highbeam");
@@ -385,6 +385,7 @@ async fn indicator_handler(
         match leds {
             None => (),
             Some(situation) => {
+                info!("situation.gripheat: {:?}", situation.gripheat);
                 // Minimal:
                 indicators_instances
                     .usb
