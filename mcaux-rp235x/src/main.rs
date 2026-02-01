@@ -10,6 +10,7 @@ use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, PIO0};
 use embassy_rp::pio::{InterruptHandler, Pio};
 use mcaux::{main_rp, AssignedResources, SwitchingResources, split_resources};
+use panic_probe as _;
 use static_cell::StaticCell;
 
 #[unsafe(link_section = ".bi_entries")]
@@ -23,12 +24,14 @@ pub static PICOTOOL_ENTRIES: [embassy_rp::binary_info::EntryAddr; 4] = [
     embassy_rp::binary_info::rp_program_build_attribute!(),
 ];
 
+/*  For when "use panic_probe as _;" is not enabled above.
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     defmt::error!("Panic occurred: {:?}", defmt::Display2Format(info));
     // whatever else to do
     loop {} // Halt the program
 }
+*/
 
 // from wifi_blinky, setup to twiddle the PicoW LED (and for that matter to use
 // the wifi subsystem at all)
