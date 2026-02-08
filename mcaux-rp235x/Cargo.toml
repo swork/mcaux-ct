@@ -19,10 +19,16 @@ cyw43 = { version = "0.6.0", features = ["defmt", "firmware-logs"] }
 cyw43-pio = { version = "0.9.0", features = ["defmt"] }
 defmt = "1.0.1"
 defmt-rtt = "1.1.0"
+embassy-boot = { version = "0.6.1", features = ["defmt"] }
+embassy-embedded-hal = "0.5.0"
 embassy-executor = { version = "0.9.1", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
-embassy-rp = { version = "0.9.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "binary-info", "rp235xa"] }
+embassy-net = { version = "0.8.0", features = ["proto-ipv4", "tcp", "mdns", "dns", "dhcpv4", "defmt"] }
+embassy-rp = { version = "0.9.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "rp235xa"] }
+embassy-sync = "0.7.2"
+embedded-storage-async = "0.4.1"
 mcaux = { version="0.1.0", path="../mcaux", features = ["rp235xa"]}
 panic-probe = { version = "1.0.0", features = ["defmt"] }
 static_cell = "2.1.1"
+telemetry = { version = "0.1.0", path = "../telemetry" }
 
 

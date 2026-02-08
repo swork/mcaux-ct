@@ -41,7 +41,7 @@ pub enum SwitchesState {
             */
 }
 
-/// Details regarding one input.
+/// Details regarding one input.  TODO: rename: AbstractSwitch
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AbstractInput {
     /// Backreference (for code here), and an opaque ID (for callers)

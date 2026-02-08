@@ -2,19 +2,23 @@
 #![no_main]
 
 use assign_resources::assign_resources;
-use defmt::info;
+use defmt::*;
 use embassy_executor::{Spawner, task};
 use embassy_futures::select::{Either, select};
 use embassy_rp::{Peri, peripherals, pwm };
 use embassy_rp::gpio::{Input, Level, Output, Pull};
 use embassy_rp::pwm::{Pwm, PwmOutput, SetDutyCycle};
+use embassy_rp::watchdog::Watchdog;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::Channel;
+use embassy_sync::channel::{Channel, Sender};
 use embassy_time::{Duration, Timer};
 use fixed::FixedU16;
 use fixed::types::extra::U4;
 use mcaux_indicators::{IndicatorController, LedsSituation};
 use momentary::{AbstractInput, SwitchOutputController, SwitchesState};
+use telemetry::{TelemetryOperation, TELEMETRY_CHANNEL_DEPTH};
+
+const WATCHDOG_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// How many receive slots for inter-task Channels
 const SWITCH_CHANNEL_DEPTH: usize = 5; // TODO: 1 should be sufficient, experiment
@@ -137,12 +141,21 @@ assign_resources! {
         out_grp: PIN_18,
         out_nav: PIN_19,
         pwm_outgrp: PWM_SLICE1,
+        watchdog: WATCHDOG,
     }
 }
 
-// #[embassy_executor::task]
-pub async fn main_rp(spawner: Spawner, p: SwitchingResources) -> () {
+#[embassy_executor::task]
+pub async fn main_rp(
+    spawner: Spawner,
+    p: SwitchingResources,
+    _n: Sender<'static, CriticalSectionRawMutex, TelemetryOperation, TELEMETRY_CHANNEL_DEPTH>,
+) -> () {
     let mut blinker = Output::new(p.led_blinker, Level::High);
+
+    // Override bootloader watchdog
+    let mut watchdog = Watchdog::new(p.watchdog);
+    watchdog.start(WATCHDOG_TIMEOUT);
 
 /*
     // serial trace output - sidestep unresolved RTT woes
@@ -277,6 +290,7 @@ pub async fn main_rp(spawner: Spawner, p: SwitchingResources) -> () {
 
     loop {
         info!("Top of loop");
+        watchdog.feed();
         switch_controller.remap();
 
         // Reflect model to output hardware
@@ -351,6 +365,8 @@ pub async fn main_rp(spawner: Spawner, p: SwitchingResources) -> () {
         let isclosed = abstract_input_update.isclosed;
         switch_controller.switch[idx].isclosed = isclosed;
 
+        // dfu::mark_okay_idempotent();
+
         // And around the loop. Processing switch changes is at the
         // top to establish initial conditions.
     }
@@ -385,7 +401,6 @@ async fn indicator_handler(
         match leds {
             None => (),
             Some(situation) => {
-                info!("situation.gripheat: {:?}", situation.gripheat);
                 // Minimal:
                 indicators_instances
                     .usb

@@ -20,3 +20,7 @@ target_wasm
 
 # CI failures - is this a fix?
 Cargo.lock
+
+# secrets
+mcaux-rp235x/access_points.*
+

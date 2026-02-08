@@ -14,15 +14,18 @@ cortex-m-rt = "0.7.5"
 critical-section = "1.2.0"
 cyw43 = "0.6.0"
 defmt = "1.0.1"
+embassy-boot = "0.6.1"
 embassy-embedded-hal = { version = "0.5.0", features = ["defmt"] }
 embassy-executor = { version = "0.9.1", features = ["arch-cortex-m", "defmt", "executor-interrupt"] }
 embassy-futures = "0.1.2"
 embassy-rp = { version = "0.9.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl"] }
 embassy-sync = { version = "0.7.2", features = ["defmt"] }
 embassy-time = { version = "0.5.0", features = ["defmt", "defmt-timestamp-uptime"] }
+embedded-storage-async = "0.4.1"
 fixed = "1.30.0"
 fixed-macro = "1.2.0"
 mcaux-indicators = { version = "0.1.0", path = "../mcaux-indicators" }
 momentary = { version = "0.1.0", path = "../momentary" }
 portable-atomic = { version = "1.13.0", features = ["critical-section"] }
 static_cell = "2.1.1"
+telemetry = { version = "0.1.0", path = "../telemetry" }
