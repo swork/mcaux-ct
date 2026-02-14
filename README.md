@@ -1,9 +1,8 @@
 # MCAux-CT
 
  - [![CI rp235x](https://github.com/swork/mcaux-ct/actions/workflows/ci-rp235x.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/ci-rp235x.yml)[![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=mcaux-rp235x)](https://deps.rs/repo/github/swork/mcaux-ct?path=mcaux-rp235x)
- - [![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=mcaux-rp2040)](https://deps.rs/repo/github/swork/mcaux-ct?path=mcaux-rp2040) for mcaux-rp2040
- - [![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=demo)](https://deps.rs/repo/github/swork/mcaux-ct?path=demo) for demo
- - [![Build Status](https://github.com/swork/mcaux-ct/workflows/CI/badge.svg)](https://github.com/swork/mcaux-ct/actions?workflow=CI)
+ - [![CI rp2040](https://github.com/swork/mcaux-ct/actions/workflows/ci-rp2040.yml/badge.svg)][![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=mcaux-rp2040)](https://deps.rs/repo/github/swork/mcaux-ct?path=mcaux-rp2040)
+ - [![CI demo](https://github.com/swork/mcaux-ct/actions/workflows/ci-demo.yml/badge.svg)][![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=demo)](https://deps.rs/repo/github/swork/mcaux-ct?path=demo)
 
 This is the repo for mcaux-ct, a motorcycle auxiliary equipment controller, a quixotic art project for my KLR650.
 
