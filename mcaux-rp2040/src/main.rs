@@ -13,10 +13,10 @@ use embassy_rp::clocks::RoscRng;
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, PIO0};
 use embassy_rp::pio::{InterruptHandler, Pio};
-use mcaux::{main_rp, AssignedResources, SwitchingResources, split_resources};
+use mcaux::{AssignedResources, SwitchingResources, main_rp, split_resources};
 use static_cell::StaticCell;
 #[allow(unused)]
-use telemetry::{TelemetryOperation, TELEMETRY_CHANNEL};
+use telemetry::{TELEMETRY_CHANNEL, TelemetryOperation};
 
 #[unsafe(link_section = ".bi_entries")]
 #[used]
@@ -59,14 +59,16 @@ async fn main(spawner: Spawner) {
 
     // Parse secrets up front, so bad format etc. won't be committed on update.
     const SECRETS_TXT: &str = env!("ACCESS_POINTS");
-    let secrets_colon_idx:usize = match SECRETS_TXT.chars().position(|c| c == ':') {
+    let secrets_colon_idx: usize = match SECRETS_TXT.chars().position(|c| c == ':') {
         Some(idx) => idx,
         _ => panic!("Check access_points.txt for colon"),
     };
     let ap: &str = &SECRETS_TXT[..secrets_colon_idx];
-    let pw: &str = &SECRETS_TXT[secrets_colon_idx+1..];
+    let pw: &str = &SECRETS_TXT[secrets_colon_idx + 1..];
 
-    spawner.spawn(main_rp(spawner, r.switching, TELEMETRY_CHANNEL.sender())).expect("Main switcher task");
+    spawner
+        .spawn(main_rp(spawner, r.switching, TELEMETRY_CHANNEL.sender()))
+        .expect("Main switcher task");
 
     // Move these to fixed sections in memory map, per wifi_blinky.rs
     // to save space
@@ -97,14 +99,19 @@ async fn main(spawner: Spawner) {
         .set_power_management(cyw43::PowerManagementMode::PowerSave)
         .await;
 
-        let _telemetry_receiver = TELEMETRY_CHANNEL.receiver();
+    let _telemetry_receiver = TELEMETRY_CHANNEL.receiver();
 
     // BEGIN NETWORK SETUP BLOCK
     let config = Config::dhcpv4(Default::default());
     let mut rng = RoscRng;
     let seed = rng.next_u64();
     static RESOURCES: StaticCell<StackResources<5>> = StaticCell::new();
-    let (stack, runner) = embassy_net::new(net_device, config, RESOURCES.init(StackResources::new()), seed);
+    let (stack, runner) = embassy_net::new(
+        net_device,
+        config,
+        RESOURCES.init(StackResources::new()),
+        seed,
+    );
     // END NETWORK SETUP BLOCK
 
     // The motorcycle switch manager expects to do networking very
@@ -112,13 +119,15 @@ async fn main(spawner: Spawner) {
     // needed or telemetry is of interest (temperature of the bike's
     // voltage regulator for example). In most runs this loop will wait
     // at this receive() operation until power-off.
-//    let operation = telemetry_receiver.receive().await;
+    //    let operation = telemetry_receiver.receive().await;
 
     // Delay this until network is requested. Saves dhcp operations when link is
     // down. Another application, one that expects to do networking on an
     // ongoing basis, would start this earlier and look for operation requests
     // in a loop, but we don't need to loop.
-    spawner.spawn(net_task(runner)).expect("spawn net_task(runner)");
+    spawner
+        .spawn(net_task(runner))
+        .expect("spawn net_task(runner)");
 
     // TODO: Put a pulser on the indicators, overriding all else.
     // RGB black
@@ -127,7 +136,7 @@ async fn main(spawner: Spawner) {
 
     // TODO Loop over several: home wifi, my phone's hotspot
     #[allow(clippy::never_loop)]
-    'outer: loop {  // not a loop, just a place for this label
+    'outer: loop {
         for _i in 0..5 {
             if let Err(err) = control.join(ap, JoinOptions::new(pw.as_bytes())).await {
                 info!("join ssid {:?} failed: {:?}", ap, err.status);
@@ -179,11 +188,9 @@ async fn blink(on_p: bool, control: &mut cyw43::Control<'_>) -> () {
     control.gpio_set(0, on_p).await;
 }
 
-async fn _network_telemetry(_control: &mut cyw43::Control<'_>) -> () {
-}
+async fn _network_telemetry(_control: &mut cyw43::Control<'_>) -> () {}
 
-async fn _network_dfu(_control: &mut cyw43::Control<'_>) -> () {
-}
+async fn _network_dfu(_control: &mut cyw43::Control<'_>) -> () {}
 
 #[embassy_executor::task]
 async fn net_task(mut runner: embassy_net::Runner<'static, cyw43::NetDriver<'static>>) -> ! {

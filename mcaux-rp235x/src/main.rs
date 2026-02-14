@@ -154,7 +154,6 @@ async fn main(spawner: Spawner) -> () {
     // TODO Loop over several: home wifi, my phone's hotspot
     #[allow(clippy::never_loop)]
     'outer: loop {
-        // not a loop, just a place for this label
         for _i in 0..5 {
             if let Err(err) = control.join(ap, JoinOptions::new(pw.as_bytes())).await {
                 info!("join ssid {:?} failed: {:?}", ap, err.status);
