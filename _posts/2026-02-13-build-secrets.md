@@ -1,5 +1,5 @@
 ---
-Build secrets
+title: Build secrets
 ---
 
 Leveraging Github Actions and Pages as a distribution system for firmware updates would (will?) be slick, but among the problems that needs managing is that secrets baked into the firmware become public.
