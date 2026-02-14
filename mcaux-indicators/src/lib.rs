@@ -1,16 +1,20 @@
 #![no_std]
 #[cfg(not(any(target_os = "none", target_family = "wasm")))]
 extern crate std;
+
 #[allow(unused_imports)]
 #[cfg(target_os = "none")]
 use defmt::info;
+#[allow(unused_imports)]
 #[cfg(target_os = "none")]
 use embassy_time::Duration;
+#[allow(unused_imports)]
 #[cfg(target_family = "wasm")]
 use log::info;
 #[cfg(not(any(target_os = "none", target_family = "wasm")))]
 #[allow(unused_imports)]
 use log::{error, info, trace, warn};
+
 #[cfg(not(any(target_os = "none", target_family = "wasm")))]
 use std::time::Duration;
 #[cfg(target_family = "wasm")]
