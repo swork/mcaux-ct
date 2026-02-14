@@ -231,10 +231,10 @@ impl eframe::App for TemplateApp {
             ui.label(format!(
                 "outputs: {:?}",
                 self.generic_switch_controller
-		    .output
-		    .iter()
-		    .map(|x| x.value)
-		    .collect::<Vec<u8>>()
+                    .output
+                    .iter()
+                    .map(|x| x.value)
+                    .collect::<Vec<u8>>()
             ));
             ui.separator();
 

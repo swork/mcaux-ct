@@ -27,6 +27,8 @@ jobs:
         with:
           command: check
           args: --all-features
+        env:
+          ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
 
   fmt:
     name: Rustfmt
@@ -65,6 +67,8 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
+        env:
+          ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
 
   build:
     runs-on: ${{ matrix.os }}
@@ -94,3 +98,5 @@ jobs:
         use-cross: true
         command: build
         args: --verbose --release --target=${{ matrix.TARGET }}
+      env:
+        ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}

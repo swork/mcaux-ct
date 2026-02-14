@@ -5,10 +5,10 @@ use assign_resources::assign_resources;
 use defmt::*;
 use embassy_executor::{Spawner, task};
 use embassy_futures::select::{Either, select};
-use embassy_rp::{Peri, peripherals, pwm };
 use embassy_rp::gpio::{Input, Level, Output, Pull};
 use embassy_rp::pwm::{Pwm, PwmOutput, SetDutyCycle};
 use embassy_rp::watchdog::Watchdog;
+use embassy_rp::{Peri, peripherals, pwm};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::{Channel, Sender};
 use embassy_time::{Duration, Timer};
@@ -16,7 +16,7 @@ use fixed::FixedU16;
 use fixed::types::extra::U4;
 use mcaux_indicators::{IndicatorController, LedsSituation};
 use momentary::{AbstractInput, SwitchOutputController, SwitchesState};
-use telemetry::{TelemetryOperation, TELEMETRY_CHANNEL_DEPTH};
+use telemetry::{TELEMETRY_CHANNEL_DEPTH, TelemetryOperation};
 
 const WATCHDOG_TIMEOUT: Duration = Duration::from_secs(8);
 
@@ -157,14 +157,14 @@ pub async fn main_rp(
     let mut watchdog = Watchdog::new(p.watchdog);
     watchdog.start(WATCHDOG_TIMEOUT);
 
-/*
-    // serial trace output - sidestep unresolved RTT woes
-    let mut config = uart::Config::default();
-    config.baudrate = 38400; // default for my TTL/serial donglen
-    let mut uart = uart::Uart::new_blocking(p.uart, p.pin_uart_tx, p.pin_uart_rx, config);
-    //    let result = defmt_serial::defmt_serial(SERIAL.init(uart));
-    let _ = uart.blocking_write(b"!");
-*/
+    /*
+        // serial trace output - sidestep unresolved RTT woes
+        let mut config = uart::Config::default();
+        config.baudrate = 38400; // default for my TTL/serial donglen
+        let mut uart = uart::Uart::new_blocking(p.uart, p.pin_uart_tx, p.pin_uart_rx, config);
+        //    let result = defmt_serial::defmt_serial(SERIAL.init(uart));
+        let _ = uart.blocking_write(b"!");
+    */
 
     // State machine tells which outputs are on as inputs change.
     // TODO Isn't this an Advisor, as we do the controlling in our loop?
