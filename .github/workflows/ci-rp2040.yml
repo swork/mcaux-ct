@@ -7,7 +7,6 @@ env:
   RUSTDOCFLAGS: -D warnings
 
 jobs:
-      
   check:
     name: Check
     runs-on: ubuntu-latest
@@ -15,10 +14,11 @@ jobs:
       run:
         working-directory: mcaux-rp2040
     steps:
-      - run: pwd
-        name: What dir are we in at start of Check?
       - uses: actions/checkout@v4
+      - run: pwd
+        name: What dir are we in after checkout?
       - uses: actions-rs/toolchain@v1
+        name: toolchain
         with:
           profile: minimal
           toolchain: stable

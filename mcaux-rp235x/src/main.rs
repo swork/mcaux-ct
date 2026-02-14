@@ -69,13 +69,13 @@ async fn main(spawner: Spawner) -> () {
     let r = split_resources!(p);
 
     // Parse secrets up front, so bad format etc. won't be committed on update.
-    const SECRETS_TXT: &[u8] = include_bytes!("../access_points.txt");
-    let secrets_colon_idx = match SECRETS_TXT[..].iter().position(|&b| b == b':') {
+    const SECRETS_TXT: &str = env!("ACCESS_POINTS");
+    let secrets_colon_idx = match SECRETS_TXT.chars().position(|c| c == ':') {
         Some(idx) => idx,
         _ => panic!("Check access_points.txt for colon"),
     };
-    let ap: &str = str::from_utf8(&SECRETS_TXT[..secrets_colon_idx]).unwrap();
-    let pw: &[u8] = &SECRETS_TXT[secrets_colon_idx+1..];
+    let ap: &str = &SECRETS_TXT[..secrets_colon_idx];
+    let pw: &[u8] = &SECRETS_TXT[secrets_colon_idx+1..].as_bytes();
 
     spawner.spawn(main_rp(spawner, r.switching, TELEMETRY_CHANNEL.sender())).expect("Main switcher task");
 
@@ -83,6 +83,7 @@ async fn main(spawner: Spawner) -> () {
     // to save space
     let fw = include_bytes!("../../../../Github/embassy/cyw43-firmware/43439A0.bin");
     let clm = include_bytes!("../../../../Github/embassy/cyw43-firmware/43439A0_clm.bin");
+    //let nvram = aligned_bytes!("../../../../Github/embassy/cyw43-firmware/nvram_rp2040.bin");
 
     let pwr = Output::new(p.PIN_23, Level::Low);
     let cs = Output::new(p.PIN_25, Level::High);
@@ -138,7 +139,7 @@ async fn main(spawner: Spawner) -> () {
 
     // TODO Loop over several: home wifi, my phone's hotspot
     'outer: loop {  // not a loop, just a place for this label
-        for i in 0..5 {
+        for _i in 0..5 {
             if let Err(err) = control.join(ap, JoinOptions::new(pw)).await {
                 info!("join ssid {:?} failed: {:?}", ap, err.status);
                 continue;
@@ -160,28 +161,28 @@ async fn main(spawner: Spawner) -> () {
     // END NETWORKING_SETUP
 
     // from here, green RGB blinks off when network operations are in .await
-
+    match operation {
+        TelemetryOperation::Run(_) => {
 /*
-        match operation {
-            TelemetryOperation::Run(_) => {
-                // take_indicators();
-                if connect() {
-                    indicators_sending();
-                    send_telemetry();
-                    indicators_retrieving();
-                    if retrieve_dfu_state() {
-                        retrieve_and_write_dfu();
-                        reset();
-                    }
+            // take_indicators();
+            if connect() {
+                indicators_sending();
+                send_telemetry();
+                indicators_retrieving();
+                if retrieve_dfu_state() {
+                    retrieve_and_write_dfu();
+                    reset();
                 }
-                release_indicators();
             }
-        }
+            release_indicators();
 */
+        }
+    }
 
     // Motorcycle: reset the controller after one network cycle.
     // Other uses would want other action.
     //reset();
+    panic!("Deliberate panic to stop the show");
 }
 
 #[allow(dead_code)]

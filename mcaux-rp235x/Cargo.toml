@@ -15,7 +15,7 @@ bench = false
 [dependencies]
 assign-resources = "0.5.0"
 cortex-m-rt = "0.7.5"
-cyw43 = { version = "0.6.0", features = ["defmt", "firmware-logs"] }
+cyw43 = { version = "0.6.0", features = ["defmt", "firmware-logs"]}
 cyw43-pio = { version = "0.9.0", features = ["defmt"] }
 defmt = "1.0.1"
 defmt-rtt = "1.1.0"
