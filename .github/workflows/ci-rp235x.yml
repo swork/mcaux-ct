@@ -27,6 +27,7 @@ jobs:
         with:
           command: check
           args: --all-features
+          working-directory: mcaux-rp235x
         env:
           ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
 
