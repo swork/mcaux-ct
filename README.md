@@ -1,6 +1,7 @@
 # MCAux-CT
 
-[![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg)](https://deps.rs/repo/github/swork/mcaux-ct)
+mcaux-rp235x: [![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=mcaux-rp235x)](https://deps.rs/repo/github/swork/mcaux-ct?path=mcaux-rp235x)
+mcaux-rp2040: [![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg)](https://deps.rs/repo/github/swork/mcaux-ct?path=mcaux-rp2040)
 [![Build Status](https://github.com/swork/mcaux-ct/workflows/CI/badge.svg)](https://github.com/swork/mcaux-ct/actions?workflow=CI)
 
 This is the repo for mcaux-ct, a motorcycle auxiliary equipment controller, a quixotic art project for my KLR650.
