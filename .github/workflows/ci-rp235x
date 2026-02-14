@@ -1,0 +1,102 @@
+on: [push, pull_request, workflow_dispatch]
+
+name: CI rp235x
+
+env:
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcaux-rp235x
+    steps:
+      - uses: actions/checkout@v4
+      - run: pwd
+        name: What dir are we in after checkout?
+      - uses: actions-rs/toolchain@v1
+        name: toolchain
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --all-features
+        env:
+          ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcaux-rp235x
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcaux-rp235x
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings
+        env:
+          ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
+
+  build:
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: mcaux-rp235x
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: none
+          TARGET: arm-none-eabi
+
+    steps:
+    - name: Building ${{ matrix.TARGET }}
+      run: echo "${{ matrix.TARGET }}"
+
+    - uses: actions/checkout@master
+    - uses: actions-rs/toolchain@v1.0.1
+      with:
+        toolchain: stable
+        target: ${{ matrix.TARGET }}
+        override: true
+
+    - uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: build
+        args: --verbose --release --target=${{ matrix.TARGET }}
+      env:
+        ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
