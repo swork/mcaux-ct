@@ -64,7 +64,7 @@ async fn main(spawner: Spawner) {
         _ => panic!("Check access_points.txt for colon"),
     };
     let ap: &str = &SECRETS_TXT[..secrets_colon_idx];
-    let pw: &[u8] = &SECRETS_TXT[secrets_colon_idx+1..].as_bytes();
+    let pw: &str = &SECRETS_TXT[secrets_colon_idx+1..];
 
     spawner.spawn(main_rp(spawner, r.switching, TELEMETRY_CHANNEL.sender())).expect("Main switcher task");
 
@@ -126,9 +126,10 @@ async fn main(spawner: Spawner) {
     // BEGIN NETWORKING SETUP, from embassy rp wifi_webrequest example
 
     // TODO Loop over several: home wifi, my phone's hotspot
+    #[allow(clippy::never_loop)]
     'outer: loop {  // not a loop, just a place for this label
         for _i in 0..5 {
-            if let Err(err) = control.join(ap, JoinOptions::new(pw)).await {
+            if let Err(err) = control.join(ap, JoinOptions::new(pw.as_bytes())).await {
                 info!("join ssid {:?} failed: {:?}", ap, err.status);
                 continue;
             }

@@ -5,6 +5,7 @@ name: CI rp2040
 env:
   RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
+  ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
 
 jobs:
   check:
@@ -15,20 +16,13 @@ jobs:
         working-directory: mcaux-rp2040
     steps:
       - uses: actions/checkout@v4
-      - run: pwd
-        name: What dir are we in after checkout?
-      - uses: actions-rs/toolchain@v1
-        name: toolchain
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all-features
-        env:
-          ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
+          target: thumbv6m-none-eabi
+      - run: cargo check --all-features
 
   fmt:
     name: Rustfmt
@@ -38,16 +32,14 @@ jobs:
         working-directory: mcaux-rp2040
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
+          target: thumbv6m-none-eabi
           components: rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+      - run: cargo fmt --all -- --check
 
   clippy:
     name: Clippy
@@ -57,46 +49,25 @@ jobs:
         working-directory: mcaux-rp2040
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
+          target: thumbv6m-none-eabi
           components: clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
-        env:
-          ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
+      - run: cargo clippy -- -D warnings
 
   build:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: mcaux-rp2040
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-        - os: none
-          TARGET: arm-none-eabi
-
     steps:
-    - name: Building ${{ matrix.TARGET }}
-      run: echo "${{ matrix.TARGET }}"
-
-    - uses: actions/checkout@master
-    - uses: actions-rs/toolchain@v1.0.1
-      with:
-        toolchain: stable
-        target: ${{ matrix.TARGET }}
-        override: true
-
-    - uses: actions-rs/cargo@v1
-      with:
-        use-cross: true
-        command: build
-        args: --verbose --release --target=${{ matrix.TARGET }}
-      env:
-        ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
+      - uses: actions/checkout@master
+      - uses: actions-rust-lang/setup-rust-toolchain@v1.0.1
+        with:
+          toolchain: stable
+          target: thumbv6m-none-eabi
+          override: true
+      - run: cargo build --verbose --release
