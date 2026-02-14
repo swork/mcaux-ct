@@ -5,6 +5,7 @@ name: CI rp235x
 env:
   RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
+  ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
 
 jobs:
   check:
@@ -15,10 +16,7 @@ jobs:
         working-directory: mcaux-rp235x
     steps:
       - uses: actions/checkout@v4
-      - run: pwd
-        name: What dir are we in after checkout?
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-        name: toolchain
         with:
           profile: minimal
           toolchain: stable
@@ -26,8 +24,6 @@ jobs:
           target: thumbv8m.main-none-eabihf
       - run: ln -s memory.x-APP memory.x
       - run: cargo check --all-features --target thumbv8m.main-none-eabihf
-        env:
-          ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
 
   fmt:
     name: Rustfmt
@@ -37,16 +33,15 @@ jobs:
         working-directory: mcaux-rp235x
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
+          target: thumbv8m.main-none-eabihf
           components: rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+      - run: ln -s memory.x-APP memory.x
+      - run: cargo fmt --all -- --check
 
   clippy:
     name: Clippy
@@ -56,46 +51,28 @@ jobs:
         working-directory: mcaux-rp235x
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
+          target: thumbv8m.main-none-eabihf
           components: clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
-        env:
-          ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
+      - run: ln -s memory.x-APP memory.x
+      - run: cargo clippy -- -D warnings
 
   build:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: mcaux-rp235x
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-        - os: none
-          TARGET: arm-none-eabi
-
     steps:
-    - name: Building ${{ matrix.TARGET }}
-      run: echo "${{ matrix.TARGET }}"
+      - uses: actions/checkout@master
+      - uses: actions-rust-lang/setup-rust-toolchain@v1.0.1
+        with:
+          toolchain: stable
+          target: thumbv8m.main-none-eabihf
+          override: true
+      - run: ln -s memory.x-APP memory.x
+      - run: cargo build --verbose --release
 
-    - uses: actions/checkout@master
-    - uses: actions-rust-lang/setup-rust-toolchain@v1.0.1
-      with:
-        toolchain: stable
-        target: thumbv8m.main-none-eabihf
-        override: true
-
-    - uses: actions-rs/cargo@v1
-      with:
-        use-cross: true
-        command: build
-        args: --verbose --release --target thumbv8m.main-none-eabihf
-      env:
-        ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
