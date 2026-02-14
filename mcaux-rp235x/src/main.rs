@@ -5,16 +5,20 @@ use cyw43::JoinOptions;
 use cyw43_pio::{DEFAULT_CLOCK_DIVIDER, PioSpi};
 use defmt::info;
 use defmt_rtt as _;
+#[allow(unused)]
 use embassy_boot::{AlignedBuffer, FirmwareUpdater, FirmwareUpdaterConfig};
 use embassy_executor::Spawner;
 use embassy_net::{Config, StackResources};
 use embassy_rp::bind_interrupts;
 use embassy_rp::clocks::RoscRng;
+#[allow(unused)]
 use embassy_rp::flash::Flash;
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, PIO0};
 use embassy_rp::pio::{InterruptHandler, Pio};
+#[allow(unused)]
 use embassy_sync::blocking_mutex::Mutex;
+#[allow(unused)]
 use embassy_sync::channel::Channel;
 use mcaux::{AssignedResources, SwitchingResources, main_rp, split_resources};
 use panic_probe as _;
