@@ -26,6 +26,7 @@ use static_cell::StaticCell;
 use telemetry::{TELEMETRY_CHANNEL, TelemetryOperation};
 
 // rp235x has 4MB storage
+#[allow(unused)]
 const FLASH_SIZE: usize = 4 * 1024 * 1024;
 
 /*
@@ -87,9 +88,9 @@ async fn main(spawner: Spawner) -> () {
 
     // Move these to fixed sections in memory map, per wifi_blinky.rs
     // to save space
-    let fw = include_bytes!("../../../../Github/embassy/cyw43-firmware/43439A0.bin");
-    let clm = include_bytes!("../../../../Github/embassy/cyw43-firmware/43439A0_clm.bin");
-    //let nvram = aligned_bytes!("../../../../Github/embassy/cyw43-firmware/nvram_rp2040.bin");
+    let fw = include_bytes!("../../embassy/cyw43-firmware/43439A0.bin");
+    let clm = include_bytes!("../../embassy/cyw43-firmware/43439A0_clm.bin");
+    //let nvram = aligned_bytes!("../../embassy/cyw43-firmware/nvram_rp2040.bin");
 
     let pwr = Output::new(p.PIN_23, Level::Low);
     let cs = Output::new(p.PIN_25, Level::High);
