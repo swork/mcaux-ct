@@ -24,7 +24,8 @@ jobs:
           toolchain: stable
           override: true
           target: thumbv8m.main-none-eabihf
-      - run: pwd && cargo check --all-features --target thumbv8m.main-none-eabihf
+      - run: ln -s memory.x-APP memory.x
+      - run: cargo check --all-features --target thumbv8m.main-none-eabihf
         env:
           ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
 
