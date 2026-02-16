@@ -1,0 +1,141 @@
+#+TITLE: Readme for utility-section
+#+AUTHOR: Steve Work <steve@renlabs.com>
+
+* utility-section
+
+... is a no-std crate for managing a collection of contiguous flash pages in the context of bare metal embedded applications, coordinating its use across several executables. The initial motivation was convenient managment of key/value secrets in code hosted and built on publicly visible infrastructure (Github etc.) but the scheme is intended to be extensible to other use cases. In particular it supports a blob store, useful for holding firmware blobs (like those required to support cyw43 radio modules) outside of executables, saving device space for DFU arrangements and compile/transfer time during development.
+
+** bit format
+
+Initial spitballing, consider this section out of date before I even publish it.
+
+#+begin_example
+SECTION: TABLE_SECTION PADDING BLOB_SECTION
+TABLE_SECTION: TABLES_HEADER TABLES
+TABLES_HEADER: TABLES_COUNT TABLE_DEF{TABLES_COUNT}
+TABLES_COUNT: u8  /* or Huffman-coded unsigned int, scaling to bigger values */
+TABLE_DEF: TABLE_TYPE TABLE_DEETS
+TABLE_TYPE: 's'
+TABLE_DEETS: TABLE_TYPE == 's' ?: STRING_BYTES
+STRING_BYTES: u8
+TABLES: TABLE{TABLES_COUNT}
+TABLE: TABLE_ENTRY*  /* ends with empty entry */
+TABLE_ENTRY: corresponding TABLE_TYPE == 's' ?: STRING_LEN u8{0..corresponding STRING_BYTES - 1}
+STRING_LEN: u8
+PADDING: u8{0..=3}
+BLOB_SECTION: BLOB*  /* ends with empty blob */
+BLOB: BLOB_LENGTH BLOB_ID BLOB_ALIGNMENT BLOB_PADDING BLOB_BYTES
+BLOB_LENGTH: u32  /* big-endian */
+BLOB_ID: u16
+BLOB_ALIGNMENT: u16
+BLOB_PADDING u8*
+BLOB_BYTES: u8{BLOB_LENGTH}
+#+end_example
+
+The only table type defined to date is 's', intended as a store of strings with a configurable maximum length. Key/value pairs are conventionally coded here like environment variables, with ='='= separating key from value and the key precluded from ='='= characters. Each string TABLE_ENTRY is a one-byte string length followed by the string itself. The length of each string in bytes must be at least one less than STRING_BYTES. Subsequent string items follow immediately after the last byte of their predecessor, with no padding. A zero-length item (single byte 0x00) ends the string table.
+
+BLOB_SECTION holds a sequence of blobs identified only by their position in the collection. BLOB_LENGTH is big-endian. A BLOB_LENGTH of zero (0x00_00_00_00) marks the end of BLOB_SECTION (so BLOB_SECTION is always at least four bytes in length total). Padding consisting of zero-bytes is added after the last string to align the BLOB_SECTION to four bytes, and between the BLOB_ALIGNMENT value and the first blob byte. The blob section end is marked by an entry with BLOB_LENGTH set to zero (and the following values, BLOB_ID, BLOB_ALIGNMENT, BLOB_PADDING and BLOB_BYTES) omitted.
+
+Here's a concrete example in semantically equivalent Rust, bitwise equivalent if single-byte alignment is assumed. Of course arbitrary SECTIONs can't be represented by a Rust-struct overlay in this manner, because different TABLE_TYPEs and TABLE_DEETs and BLOB_LENGTHs imply offsets unknowable to the compiler. The SECTION must be parsed instead; that's why I defined it in sorta-BNF above. But for simple arbitrary fixed details:
+
+#+begin_example
+const TABLE_0_TYPE = b's';
+const TABLE_K_STRING_MAX = 64u8;
+const BLOB0_LEN = 8u32;
+const BLOB0_ID = 0u16;
+const BLOB0_ALIGNMENT = 8u16;
+const BLOB0_LEN_ALIGNED = BLOB0_LEN + 3;
+const BLOB0_BYTES: [u8; BLOB0_LEN_ALIGNED] = b"\0\0\0DEADBEEF";
+
+#[repr(packed)]
+struct TableDeetsK {
+    key_max: u8,
+    value_max: u8,
+    entries_count: u8,
+} // three bytes in length
+
+#[repr(packed)]
+struct TableDef {
+    table_type: u8,
+    table_def: TableDeetsK,
+} // four bytes in length
+
+struct TablesHeader {
+    tables_count: u8,
+    table_def: [TableDef; TABLES_COUNT],
+} // length in store: 1 + (4 * tables_count), so 5 here
+
+struct TableEntryK {
+    key_len: u8,
+    key: [u8; TABLE_K_KEY_MAX-1],
+    val_len: u8,
+    value: [u8; TABLE_K_VALUE_MAX-1],
+} // length in store: key_max + value_max, so 64 here
+
+struct TableK {
+    entries: [TableEntryK; TABLE_0_ENTRIES],
+} // length in store: 64 * 2, so 128 here
+
+struct Section {
+    tables_header: TablesHeader,      // next offset 4
+    tables: [TableK; TABLES_COUNT],   // next offset 
+    blob0_len: u32,
+    blob0_id: u16,
+    blob0_offset: u16,
+    blob0: [u8; BLOB0_LEN_ALIGNED],
+    blob_end_marker: usize,
+}
+
+const table_section: TableSection = TableSection {
+    tables_header = TablesHeader {
+        tables_count = TABLES_COUNT,
+        table_def = [TableDef {
+                table_type = TABLE_0_TYPE,
+            }, TABLES_COUNT],
+        ],
+    },
+    tables: [TableK; TABLES_COUNT],
+    blob0_len: BLOB0_LEN,
+    blob0: BLOB0_BYTES,
+    blob_end_marker: 0usize;
+}
+
+#+end_example
+
+** parsing interface
+
+#+begin_src rust
+  // Find access point name and password as AP and PW in first table
+  // Addr comes from the linker script
+  let s = TableSection::new(addr);
+  let mut ap: &str;
+  let mut pw: &str;
+  for (i, t) in s.tables_iter().enumerate() {
+      match i {
+          0 => match t {
+              Table::K(table_k) => {
+                  for entry_k in table_k.entries_iter() {
+                      match entry_k.key() {
+                          "AP" => { ap = entry_k.value() },
+                          "PW" => { pw = entry_k.value() },
+                          _ => (),
+                      }
+                  }
+              },
+              _ => ;
+          },
+          _ => ;
+      }
+  }
+
+  // same addr as above - BlobSection::new skips past TABLE_SECTION.
+  let b = BlobSection::new(addr);
+  while let Some((blob_len: usize, blob_offset: *u8)) = b.next_blob() {
+      // do something. Note dereferencing blob_offset requires unsafe{}.
+  }
+
+#+end_src
+
+** generating utility
+
+=cargo utility-section= reads memory.x to find the offset of the UTILITY section, and a text file containing a sequence of KEY=VALUE lines representing configuration items for the embedded application. It outputs an ELF file encoding these items as described here, and directing them to the memory location specified in the map.
