@@ -1,11 +1,23 @@
 #+TITLE: Readme for utility-section
 #+AUTHOR: Steve Work <steve@renlabs.com>
 
+* To-Dos
+
+ - [ ] Implement cargo-utility-section
+ - [ ] Include README.org code example below in tests
+
 * utility-section
 
 ... is a no-std crate for managing a collection of contiguous flash pages in the context of bare metal embedded applications, coordinating its use. The initial motivation was convenient managment of key/value secrets in code hosted and built on publicly visible infrastructure (Sourcehub, Github, etc.) but the scheme is intended to be extensible to other use cases. In particular it supports a blob store, useful for holding firmware blobs (like those required to support cyw43 radio modules) outside of executables, saving device space for DFU arrangements and compile/transfer time during development.
 
 The utility-section data is intended to be a fixed address hard-coded into the consuming application, often defined in the linker script and relayed into the generated app binary. This same address might serve to identify a subsequent section of fixed RAM/ROM storage; the utility-section API provides ways of establishing and accessing this following data (by parsing the utility-section data and providing a raw pointer past its end, with a specified alignment).
+
+** Why a from-scratch implementation?
+
+Google's =protobuf= has become the canonical way to do things like this (space-efficient encoding
+of structured data). Alignment was troublesome though: I want the option of specifying that blobs land on specific boundaries so they can be used in place, though my immediate need didn't require this. I didn't find a way to add arbitrary padding to a protobuf encoding, the more one that adapted to the alignment of the encoding itself.
+
+Likely a more exhaustive search than I did would turn up other canned approaches, but at this point I was intrigued with variable-length uint encoding and just started rolling. It didn't take all that long (cough, cough).
 
 ** bit format
 
