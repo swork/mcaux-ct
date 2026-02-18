@@ -10,8 +10,11 @@
 /// for 64- (or whatever-) bit architectures. Type parameter M puts a smaller
 /// upper limit on the acceptable bit count, mostly so tests can be run on wider
 /// architectures than a cross-compiled target. You probably want the default
-/// value for production use. Note too that it's OK to include unnecessary
-/// leading zeros, using more bytes than needed.
+/// value for production use, via hinteger() below. Note too that it's OK to
+/// include unnecessary leading zeros, using more bytes than needed.
+///
+/// Returns a tuple: the decoded value, and the raw pointer advanced to the
+/// first following byte. Or None if the decoded value wasn't going to fit.
 pub fn hinteger_explicit_maximum<const M: usize>(addr: *const u8) -> Option<(usize, *const u8)> {
     let max_accum_okay: usize = M >> 7;
     let mut accum = 0usize;
@@ -32,6 +35,7 @@ pub fn hinteger_explicit_maximum<const M: usize>(addr: *const u8) -> Option<(usi
     Some(((accum << 7) + (val as usize), addr))
 }
 
+/// hinteger_explicit_maximum defaulted to the host's usize range.
 pub fn hinteger(addr: *const u8) -> Option<(usize, *const u8)> {
     hinteger_explicit_maximum::<{ usize::MAX }>(addr)
 }
