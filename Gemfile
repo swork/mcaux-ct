@@ -3,5 +3,5 @@ gem "github-pages", "~> 232", group: :jekyll_plugins
 group :jekyll_plugins do
   gem "jekyll-feed", "~> 0.12"
   gem "minima", "~> 2.5"
-  gem "jekyll-org", "~> 1.1"
+  gem "jekyll-org", "~> 1.1.1"
 end
