@@ -1,5 +1,6 @@
 #+TITLE: UTILITY section and configuration
 #+AUTHOR: Steve Work <steve@renlabs.com>
+#+LAYOUT: post
 
 I've been rolling code for a few days, with time out to pull blackberries or run scales on the trumpet or discover One More Thing to be done to the boat trailer, and enough has shown itself up that I figured I'd better do some brain dumping. And so I give you
 
