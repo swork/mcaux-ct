@@ -8,15 +8,15 @@ unsafe extern "C" {
 pub struct Conf<const N: usize> {}
 
 impl<const N: usize> Conf<N> {
-    pub fn get_value_by_key<'a>(key: &[u8], buf: &'a mut [u8;N]) -> Option<&'a [u8]> {
+    pub fn get_value_by_key<'a>(key: &[u8], buf: &'a mut [u8; N]) -> Option<&'a [u8]> {
         let mut u: UtilitySection<N> = unsafe { UtilitySection::new(&__utility_start) };
         loop {
-            let mut mybuf: [u8;N] = [0;N];
+            let mut mybuf: [u8; N] = [0; N];
             if let Some(p) = u.next_string(&mut mybuf) {
                 if let Some(sep) = p.iter().position(|&b| b == b'=') {
                     if &p[..sep] == key {
                         *buf = mybuf;
-                        return Some(&buf[sep+1..]);
+                        return Some(&buf[sep + 1..]);
                     }
                 } else {
                     panic!("config string isn't in k=v form");
@@ -38,4 +38,3 @@ impl<const N: usize> Conf<N> {
         None
     }
 }
-

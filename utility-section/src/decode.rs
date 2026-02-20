@@ -1,5 +1,5 @@
-use core::ptr::copy_nonoverlapping;
 use crate::hinteger::hinteger_explicit_maximum;
+use core::ptr::copy_nonoverlapping;
 
 /// Track an in-memory UTILITY section at a given fixed address in memory.
 pub struct UtilitySection<const N: usize, const M: usize = { usize::MAX }> {
@@ -7,7 +7,7 @@ pub struct UtilitySection<const N: usize, const M: usize = { usize::MAX }> {
     blobs_addr: Option<*const u8>,
 }
 
-impl<const N: usize, const M:usize> UtilitySection<N, M> {
+impl<const N: usize, const M: usize> UtilitySection<N, M> {
     pub fn new(start_addr: *const u8) -> Self {
         Self {
             strings_addr: start_addr,
@@ -19,14 +19,16 @@ impl<const N: usize, const M:usize> UtilitySection<N, M> {
     /// after getting a string give another string or None. Calls
     /// after None always return None. Calls to next_string() can be
     /// intermixed with calls to next_blob() in any order.
-    pub fn next_string<'a>(&mut self, buf: &'a mut [u8;N]) -> Option<&'a [u8]> {
+    pub fn next_string<'a>(&mut self, buf: &'a mut [u8; N]) -> Option<&'a [u8]> {
         if let Some((len, addr)) = hinteger_explicit_maximum::<M>(self.strings_addr) {
             if len > 0 {
                 if len > N {
                     panic!("Inadequate buffer for string of length {:?}", len);
                 }
                 self.strings_addr = unsafe { addr.add(len) };
-                unsafe { copy_nonoverlapping(addr, buf.as_mut_ptr(), len); }
+                unsafe {
+                    copy_nonoverlapping(addr, buf.as_mut_ptr(), len);
+                }
                 Some(&buf[..len])
             } else {
                 self.blobs_addr = unsafe { Some(self.strings_addr.add(1)) };
@@ -42,11 +44,13 @@ impl<const N: usize, const M:usize> UtilitySection<N, M> {
     /// after None always return None. Calls to next_blob() can be
     /// intermixed with calls to next_string() in any order.
     pub fn next_blob(&mut self) -> Option<(usize, *const u8, usize)> {
-        if self.blobs_addr == None {
+        if self.blobs_addr.is_none() {
             let save = self.strings_addr;
             loop {
                 if let Some((len, addr)) = hinteger_explicit_maximum::<M>(self.strings_addr) {
-                    if len == 0 { break; }
+                    if len == 0 {
+                        break;
+                    }
                     self.strings_addr = unsafe { addr.add(len) };
                 } else {
                     return None;
@@ -55,10 +59,12 @@ impl<const N: usize, const M:usize> UtilitySection<N, M> {
             self.blobs_addr = unsafe { Some(self.strings_addr.add(1)) };
             self.strings_addr = save;
         }
-        if let Some((blob_len, id_addr)) = hinteger_explicit_maximum::<M>(self.blobs_addr.unwrap()) {
+        if let Some((blob_len, id_addr)) = hinteger_explicit_maximum::<M>(self.blobs_addr.unwrap())
+        {
             if blob_len > 0 {
                 if let Some((blob_id, align_addr)) = hinteger_explicit_maximum::<M>(id_addr) {
-                    if let Some((blob_align, pad_addr)) = hinteger_explicit_maximum::<M>(align_addr) {
+                    if let Some((blob_align, pad_addr)) = hinteger_explicit_maximum::<M>(align_addr)
+                    {
                         let alignment = 1 << blob_align;
                         let blob_addr = unsafe { pad_addr.add(pad_addr.align_offset(alignment)) };
                         self.blobs_addr = unsafe { Some(blob_addr.add(blob_len)) };
@@ -83,7 +89,7 @@ mod tests {
     use super::*;
 
     #[repr(align(8))]
-    struct Aligned([u8;24]);
+    struct Aligned([u8; 24]);
     const S1: Aligned = Aligned(*b"\x04AP=X\x03P=Y\0\x07\0\x03>>>DEADBEE\0");
     //                             ____----____---__----__----___-------__
     //          1st string len is 4 +   |    |  |  |  |  |  |  |    |    +- no second blob
@@ -97,7 +103,7 @@ mod tests {
     fn it_works() {
         const MAX: usize = 8;
         let mut s: UtilitySection<MAX> = UtilitySection::new(S1.0.as_ptr());
-        let mut buf: [u8;MAX] = [0;MAX];
+        let mut buf: [u8; MAX] = [0; MAX];
 
         // two strings, no more, ever
         let p = s.next_string(&mut buf).unwrap();
@@ -122,7 +128,7 @@ mod tests {
             assert_eq!(*addr.add(5), b'E');
             assert_eq!(*addr.add(6), b'E');
         }
-        assert_eq!(addr as usize % 8, 0);  // aligned
+        assert_eq!(addr as usize % 8, 0); // aligned
         assert_eq!(s.next_blob(), None);
         assert_eq!(s.next_blob(), None);
     }
@@ -131,7 +137,7 @@ mod tests {
     fn it_works_backward() {
         const MAX: usize = 8;
         let mut s: UtilitySection<MAX> = UtilitySection::new(S1.0.as_ptr());
-        let mut buf: [u8;MAX] = [0;MAX];
+        let mut buf: [u8; MAX] = [0; MAX];
 
         // One blob, aligned, no more ever
         let (len, addr, id) = s.next_blob().unwrap();
@@ -146,7 +152,7 @@ mod tests {
             assert_eq!(*addr.add(5), b'E');
             assert_eq!(*addr.add(6), b'E');
         }
-        assert_eq!(addr as usize % 8, 0);  // aligned
+        assert_eq!(addr as usize % 8, 0); // aligned
         assert_eq!(s.next_blob(), None);
         assert_eq!(s.next_blob(), None);
 
