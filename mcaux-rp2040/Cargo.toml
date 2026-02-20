@@ -25,5 +25,6 @@ embassy-rp = { version = "0.9.0", features = ["defmt", "unstable-pac", "time-dri
 defmt-rtt = "1.1.0"
 telemetry = { version = "0.1.0", path = "../telemetry" }
 embassy-net = { version = "0.8.0", features = ["proto-ipv4", "tcp", "mdns", "dns", "dhcpv4", "defmt"] }
+utility-section = { version = "0.1.0", path = "../utility-section" }
 
 

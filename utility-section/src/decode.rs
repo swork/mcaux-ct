@@ -19,16 +19,15 @@ impl<const N: usize, const M:usize> UtilitySection<N, M> {
     /// after getting a string give another string or None. Calls
     /// after None always return None. Calls to next_string() can be
     /// intermixed with calls to next_blob() in any order.
-    pub fn next_string(&mut self) -> Option<(usize, [u8;N])> {
+    pub fn next_string<'a>(&mut self, buf: &'a mut [u8;N]) -> Option<&'a [u8]> {
         if let Some((len, addr)) = hinteger_explicit_maximum::<M>(self.strings_addr) {
             if len > 0 {
                 if len > N {
                     panic!("Inadequate buffer for string of length {:?}", len);
                 }
                 self.strings_addr = unsafe { addr.add(len) };
-                let mut buf: [u8; N] = [0;N];
                 unsafe { copy_nonoverlapping(addr, buf.as_mut_ptr(), len); }
-                Some((len, buf))
+                Some(&buf[..len])
             } else {
                 self.blobs_addr = unsafe { Some(self.strings_addr.add(1)) };
                 None
@@ -98,16 +97,17 @@ mod tests {
     fn it_works() {
         const MAX: usize = 8;
         let mut s: UtilitySection<MAX> = UtilitySection::new(S1.0.as_ptr());
+        let mut buf: [u8;MAX] = [0;MAX];
 
         // two strings, no more, ever
-        let (len, buf) = s.next_string().unwrap();
-        assert_eq!(len, 4);
-        assert_eq!(&buf[..len], "AP=X".as_bytes());
-        let (len, buf) = s.next_string().unwrap();
-        assert_eq!(len, 3);
-        assert_eq!(&buf[..len], "P=Y".as_bytes());
-        assert_eq!(s.next_string(), None);
-        assert_eq!(s.next_string(), None);
+        let p = s.next_string(&mut buf).unwrap();
+        assert_eq!(p.len(), 4);
+        assert_eq!(p, "AP=X".as_bytes());
+        let p = s.next_string(&mut buf).unwrap();
+        assert_eq!(p.len(), 3);
+        assert_eq!(p, "P=Y".as_bytes());
+        assert_eq!(s.next_string(&mut buf), None);
+        assert_eq!(s.next_string(&mut buf), None);
 
         // One blob, aligned, no more ever
         let (len, addr, id) = s.next_blob().unwrap();
@@ -131,6 +131,7 @@ mod tests {
     fn it_works_backward() {
         const MAX: usize = 8;
         let mut s: UtilitySection<MAX> = UtilitySection::new(S1.0.as_ptr());
+        let mut buf: [u8;MAX] = [0;MAX];
 
         // One blob, aligned, no more ever
         let (len, addr, id) = s.next_blob().unwrap();
@@ -150,14 +151,14 @@ mod tests {
         assert_eq!(s.next_blob(), None);
 
         // two strings, no more, ever
-        let (len, buf) = s.next_string().unwrap();
-        assert_eq!(len, 4);
-        assert_eq!(&buf[..len], "AP=X".as_bytes());
-        let (len, buf) = s.next_string().unwrap();
-        assert_eq!(len, 3);
-        assert_eq!(&buf[..len], "P=Y".as_bytes());
-        assert_eq!(s.next_string(), None);
-        assert_eq!(s.next_string(), None);
+        let p = s.next_string(&mut buf).unwrap();
+        assert_eq!(p.len(), 4);
+        assert_eq!(p, "AP=X".as_bytes());
+        let p = s.next_string(&mut buf).unwrap();
+        assert_eq!(p.len(), 3);
+        assert_eq!(p, "P=Y".as_bytes());
+        assert_eq!(s.next_string(&mut buf), None);
+        assert_eq!(s.next_string(&mut buf), None);
     }
 
     #[test]
@@ -165,6 +166,7 @@ mod tests {
     fn it_panics_for_length() {
         const MAX: usize = 3;
         let mut s: UtilitySection<MAX> = UtilitySection::new(S1.0.as_ptr());
-        let (_len, _buf) = s.next_string().unwrap();
+        let buf: [u8; MAX] = [0; MAX];
+        let _p = s.next_string(&mut buf).unwrap();
     }
 }

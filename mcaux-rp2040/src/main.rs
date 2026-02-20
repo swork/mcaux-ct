@@ -17,6 +17,14 @@ use mcaux::{AssignedResources, SwitchingResources, main_rp, split_resources};
 use static_cell::StaticCell;
 #[allow(unused)]
 use telemetry::{TELEMETRY_CHANNEL, TelemetryOperation};
+use utility_section::conf;
+
+// rp2040 has 2MB storage
+#[allow(unused)]
+const FLASH_SIZE: usize = 2 * 1024 * 1024;
+
+// No config string needs to be bigger than this
+const USMAX: usize = 64;
 
 #[unsafe(link_section = ".bi_entries")]
 #[used]
@@ -57,23 +65,21 @@ async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
     let r = split_resources!(p);
 
-    // Parse secrets up front, so bad format etc. won't be committed on update.
-    const SECRETS_TXT: &str = env!("ACCESS_POINTS");
-    let secrets_colon_idx: usize = match SECRETS_TXT.chars().position(|c| c == ':') {
-        Some(idx) => idx,
-        _ => panic!("Check access_points.txt for colon"),
-    };
-    let ap: &str = &SECRETS_TXT[..secrets_colon_idx];
-    let pw: &str = &SECRETS_TXT[secrets_colon_idx + 1..];
+    let mut ap_buf: [u8; USMAX] = [0; USMAX];
+    let ap: &str = str::from_utf8(
+        conf::Conf::<USMAX>::get_value_by_key("AP".as_bytes(), &mut ap_buf).expect("AP existence"),
+    )
+    .expect("utf8");
+    let mut pw_buf: [u8; USMAX] = [0; USMAX];
+    let pw: &[u8] =
+        conf::Conf::get_value_by_key("PW".as_bytes(), &mut pw_buf).expect("Pw existence");
+    let fw = conf::Conf::<USMAX>::get_blob_by_id(1).unwrap();
+    let clm = conf::Conf::<USMAX>::get_blob_by_id(2).unwrap();
+    //  let mut nvram: &[u8] = unsafe { conf::Conf::get_blob_by_id(3) };
 
     spawner
         .spawn(main_rp(spawner, r.switching, TELEMETRY_CHANNEL.sender()))
         .expect("Main switcher task");
-
-    // Move these to fixed sections in memory map, per wifi_blinky.rs
-    // to save space
-    let fw = include_bytes!("../../embassy/cyw43-firmware/43439A0.bin");
-    let clm = include_bytes!("../../embassy/cyw43-firmware/43439A0_clm.bin");
 
     let pwr = Output::new(p.PIN_23, Level::Low);
     let cs = Output::new(p.PIN_25, Level::High);
@@ -138,7 +144,7 @@ async fn main(spawner: Spawner) {
     #[allow(clippy::never_loop)]
     'outer: loop {
         for _i in 0..5 {
-            if let Err(err) = control.join(ap, JoinOptions::new(pw.as_bytes())).await {
+            if let Err(err) = control.join(ap, JoinOptions::new(pw)).await {
                 info!("join ssid {:?} failed: {:?}", ap, err.status);
                 continue;
             }

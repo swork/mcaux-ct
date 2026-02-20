@@ -30,5 +30,6 @@ mcaux = { version="0.1.0", path="../mcaux", features = ["rp235xa"]}
 panic-probe = { version = "1.0.0", features = ["defmt"] }
 static_cell = "2.1.1"
 telemetry = { version = "0.1.0", path = "../telemetry" }
+utility-section = { version = "0.1.0", path = "../utility-section" }
 
 
