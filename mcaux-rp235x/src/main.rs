@@ -30,9 +30,6 @@ use utility_section::conf;
 #[allow(unused)]
 const FLASH_SIZE: usize = 4 * 1024 * 1024;
 
-// No config string needs to be bigger than this
-const USMAX: usize = 64;
-
 /*
 #[unsafe(link_section = ".bi_entries")]
 #[used]
@@ -77,17 +74,32 @@ async fn main(spawner: Spawner) -> () {
     let p = embassy_rp::init(Default::default());
     let r = split_resources!(p);
 
-    let mut ap_buf: [u8; USMAX] = [0; USMAX];
+    // Find the UTILITY section containing separately-loaded config data
+    unsafe extern "C" {
+        static __utility_start: u8;
+    }
+    static UTILITY_SECTION_PTR: StaticCell<*const u8> = StaticCell::new();
+    let temp_len = 1911usize * 1024usize; // TODO: get this from memory map, __utility_end, whatever
+    let utility_section: &[u8] = unsafe {
+        core::slice::from_raw_parts(
+            *UTILITY_SECTION_PTR.init(&__utility_start as *const u8),
+            temp_len,
+        )
+    };
+    // param is max item count, strings plus blobs
+    let config: conf::Conf<8> = conf::Conf::new(utility_section);
     let ap: &str = str::from_utf8(
-        conf::Conf::<USMAX>::get_value_by_key("AP".as_bytes(), &mut ap_buf).expect("AP existence"),
+        config
+            .get_value_by_key("AP".as_bytes())
+            .expect("AP existence"),
     )
     .expect("utf8");
-    let mut pw_buf: [u8; USMAX] = [0; USMAX];
-    let pw: &[u8] =
-        conf::Conf::get_value_by_key("PW".as_bytes(), &mut pw_buf).expect("Pw existence");
-    let fw = conf::Conf::<USMAX>::get_blob_by_id(1).unwrap();
-    let clm = conf::Conf::<USMAX>::get_blob_by_id(2).unwrap();
-    //  let mut nvram: &[u8] = unsafe { conf::Conf::get_blob_by_id(3) };
+    let pw: &[u8] = config
+        .get_value_by_key("PW".as_bytes())
+        .expect("PW existence");
+    let fw: &[u8] = config.get_blob_by_id(1).expect("fw existence");
+    let clm: &[u8] = config.get_blob_by_id(2).expect("clm existence");
+    //  let nvram: &[u8] = config.get_blob_by_id(3).expect("nvram existence");
 
     spawner
         .spawn(main_rp(spawner, r.switching, TELEMETRY_CHANNEL.sender()))
