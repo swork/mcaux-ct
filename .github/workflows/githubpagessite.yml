@@ -24,9 +24,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      
       - uses: actions/checkout@v5 # repo checkout
-
       - name: Setup toolchain for wasm
         run: |
           rustup update stable
@@ -36,10 +34,10 @@ jobs:
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
-        
+
       - name: Download and install Trunk binary
         run: wget -qO- https://github.com/thedodd/trunk/releases/latest/download/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xzf-
-        
+
       - name: Build WASM files collection (into demo/dist)
         run: cd demo && ../trunk build --release --public-url $public_url
         env:
@@ -58,6 +56,8 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
+          bundler-cache: true
+          cache-version: 0
 
       - name: Install dependencies
         run: bundle install
