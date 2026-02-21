@@ -1,40 +1,53 @@
-use crate::decode::UtilitySection;
+use heapless;
+use crate::decode;
 
-unsafe extern "C" {
-    static __utility_start: u8;
-}
+const MAXITEMS: usize = 9;
 
 /// Configuration retrieval got a little wet, factored out here.
-pub struct Conf<const N: usize> {}
+pub struct Conf<'a, const N: usize> {
+    section: &'a [u8],
+    items: heapless::Vec<decode::UtilityItem, MAXITEMS>,
+}
 
-impl<const N: usize> Conf<N> {
-    pub fn get_value_by_key<'a>(key: &[u8], buf: &'a mut [u8; N]) -> Option<&'a [u8]> {
-        let mut u: UtilitySection<N> = unsafe { UtilitySection::new(&__utility_start) };
-        loop {
-            let mut mybuf: [u8; N] = [0; N];
-            if let Some(p) = u.next_string(&mut mybuf) {
-                if let Some(sep) = p.iter().position(|&b| b == b'=') {
-                    if &p[..sep] == key {
-                        *buf = mybuf;
-                        return Some(&buf[sep + 1..]);
+impl<'a, const N: usize> Conf<'a, N> {
+    pub fn new(section: &'a [u8]) -> Self {
+        let mut items: heapless::Vec<decode::UtilityItem, MAXITEMS> = heapless::Vec::new();
+        if decode::collect_utility_items::<MAXITEMS>(section, &mut items).is_err() {
+            panic!("error scanning utility section");
+        }
+        Self {
+            items,
+            section,
+        }
+    }
+
+    pub fn get_value_by_key(&self, key: &'a [u8]) -> Option<&'a [u8]> {
+        for item in self.items.iter() {
+            match item {
+                decode::UtilityItem::String { offset, length } => {
+                    let end = *offset + key.len();
+                    let v = &self.section[*offset..end];
+                    if v == key {
+                        return Some(&self.section[*offset+end+1..*offset+end+1+length]);
                     }
-                } else {
-                    panic!("config string isn't in k=v form");
-                }
-            } else {
-                break;
+                },
+                _ => (),
             }
         }
         None
     }
 
-    pub fn get_blob_by_id(id: usize) -> Option<&'static [u8]> {
-        let mut u: UtilitySection<N> = unsafe { UtilitySection::new(&__utility_start) };
-        while let Some((len, raw_ptr, blob_id)) = u.next_blob() {
-            if blob_id == id {
-                return unsafe { Some(core::slice::from_raw_parts(raw_ptr, len)) };
+    pub fn get_blob_by_id(&self, find_id: usize) -> Option<&'a [u8]> {
+        for item in self.items.iter() {
+            match item {
+                decode::UtilityItem::Blob { offset, length, id } => {
+                    if *id == find_id {
+                        return Some(&self.section[*offset..*offset+length]);
+                    }
+                },
+                _ => (),
             }
         }
-        None
+         None
     }
 }
