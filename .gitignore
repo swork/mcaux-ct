@@ -24,3 +24,9 @@ Cargo.lock
 # secrets
 mcaux-rp235x/access_points.*
 
+# probe-rs artifacts
+mcaux-rp235x/logs
+
+# This is a symlink selecting a memory map. I don't want it in SCM.
+mcaux-rp235x/memory.x
+
