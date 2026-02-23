@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-embassy-sync = "0.7.2"
+embassy-sync = { version = "0.7.2", path = "../embassy/embassy-sync" }

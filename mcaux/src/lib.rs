@@ -10,19 +10,18 @@ use embassy_rp::pwm::{Pwm, PwmOutput, SetDutyCycle};
 use embassy_rp::watchdog::Watchdog;
 use embassy_rp::{Peri, peripherals, pwm};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::{Channel, Sender};
+use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Timer};
 use fixed::FixedU16;
 use fixed::types::extra::U4;
 use mcaux_indicators::{IndicatorController, LedsSituation};
 use momentary::{AbstractInput, SwitchOutputController, SwitchesState};
-use telemetry::{TELEMETRY_CHANNEL_DEPTH, TelemetryOperation};
-
-const WATCHDOG_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// How many receive slots for inter-task Channels
 const SWITCH_CHANNEL_DEPTH: usize = 5; // TODO: 1 should be sufficient, experiment
 const INDICATOR_CHANNEL_DEPTH: usize = 5;
+
+const WATCHDOG_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// How long to wait after a switch edge to decide it's fer realz.
 const DEBOUNCE: Duration = Duration::from_millis(40); // TODO configurable?
@@ -146,11 +145,7 @@ assign_resources! {
 }
 
 #[embassy_executor::task]
-pub async fn main_rp(
-    spawner: Spawner,
-    p: SwitchingResources,
-    _n: Sender<'static, CriticalSectionRawMutex, TelemetryOperation, TELEMETRY_CHANNEL_DEPTH>,
-) -> () {
+pub async fn main_rp(spawner: Spawner, p: SwitchingResources) -> () {
     let mut blinker = Output::new(p.led_blinker, Level::High);
 
     // Override bootloader watchdog
@@ -172,41 +167,45 @@ pub async fn main_rp(
 
     // Three pushbuttons and the high-beam follower
     let (sw_usb_i, out_usb_i) = switch_controller.add_switch("usb", 2, 1); // off/on
-    spawner
-        .spawn(switch_state_observer(
+    spawner.spawn(
+        switch_state_observer(
             switch_controller.switch[sw_usb_i],
             Input::new(p.sw_usb, Pull::Up),
             Level::Low,
-        ))
-        .expect("usb switch_state_observer ");
+        )
+        .expect("usb switch_state_observer "),
+    );
 
     let (sw_auxlight_i, out_auxlight_i) = switch_controller.add_switch("auxlight", 2, 0); // off/on
-    spawner
-        .spawn(switch_state_observer(
+    spawner.spawn(
+        switch_state_observer(
             switch_controller.switch[sw_auxlight_i],
             Input::new(p.sw_aux, Pull::Up),
             Level::Low,
-        ))
-        .expect("auxlight switch_state_observer");
+        )
+        .expect("auxlight switch_state_observer"),
+    );
 
     let (sw_gripheat_i, out_gripheat_i) = switch_controller.add_switch("gripheat", 5, 0); // off/low/lowmid/highmid/high
-    spawner
-        .spawn(switch_state_observer(
+    spawner.spawn(
+        switch_state_observer(
             switch_controller.switch[sw_gripheat_i],
             Input::new(p.sw_grp, Pull::Up),
             Level::Low,
-        ))
-        .expect("gripheat switch_state_observer");
+        )
+        .expect("gripheat switch_state_observer"),
+    );
 
     // Auxiliary lights only come on with high beams when enabled
     let (sw_highbeam_i, out_highbeam_i) = switch_controller.add_switch_momentary("highbeam");
-    spawner
-        .spawn(switch_state_observer(
+    spawner.spawn(
+        switch_state_observer(
             switch_controller.switch[sw_highbeam_i],
             Input::new(p.sw_hbm, Pull::Down),
             Level::High,
-        ))
-        .expect("highbeam switch_state_observer");
+        )
+        .expect("highbeam switch_state_observer"),
+    );
 
     // Fourth control: long-press of usb toggles nav
     let (_, out_nav_i) =
@@ -281,16 +280,16 @@ pub async fn main_rp(
         indicators.rgb_b.max_duty_cycle(),
     );
 
-    spawner
-        .spawn(indicator_handler(indicators, indicator_controller))
-        .expect("spawn indicator handler");
+    spawner.spawn(
+        indicator_handler(indicators, indicator_controller).expect("spawn indicator handler"),
+    );
 
     let switches_receiver = SWITCHES_CHANNEL.dyn_receiver();
     let indicator_sender = INDICATOR_CHANNEL.sender();
 
     loop {
         info!("Top of loop");
-        watchdog.feed();
+        watchdog.feed(WATCHDOG_TIMEOUT);
         switch_controller.remap();
 
         // Reflect model to output hardware

@@ -1,34 +1,36 @@
 #![no_std]
 #![no_main]
 
+use aligned::A4;
+use core::cell::RefCell;
 use cyw43::JoinOptions;
 use cyw43_pio::{DEFAULT_CLOCK_DIVIDER, PioSpi};
 use defmt::info;
 use defmt_rtt as _;
-#[allow(unused)]
-use embassy_boot::{AlignedBuffer, FirmwareUpdater, FirmwareUpdaterConfig};
+use embassy_boot::{AlignedBuffer, BlockingFirmwareUpdater, FirmwareUpdaterConfig, State};
 use embassy_executor::Spawner;
 use embassy_net::{Config, StackResources};
-use embassy_rp::bind_interrupts;
 use embassy_rp::clocks::RoscRng;
-#[allow(unused)]
 use embassy_rp::flash::Flash;
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, PIO0};
 use embassy_rp::pio::{InterruptHandler, Pio};
-#[allow(unused)]
+use embassy_rp::{bind_interrupts, dma};
 use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 #[allow(unused)]
 use embassy_sync::channel::Channel;
 use mcaux::{AssignedResources, SwitchingResources, main_rp, split_resources};
 use panic_probe as _;
 use static_cell::StaticCell;
-use telemetry::{TELEMETRY_CHANNEL, TelemetryOperation};
 use utility_section::conf;
 
 // rp235x has 4MB storage
-#[allow(unused)]
 const FLASH_SIZE: usize = 4 * 1024 * 1024;
+
+const TELEMETRY_CHANNEL_DEPTH: usize = 1;
+type TelemetryChannel = Channel<CriticalSectionRawMutex, (), TELEMETRY_CHANNEL_DEPTH>;
+static TELEMETRY_CHANNEL: StaticCell<TelemetryChannel> = StaticCell::new();
 
 /*
 #[unsafe(link_section = ".bi_entries")]
@@ -56,11 +58,12 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 // the wifi subsystem at all)
 bind_interrupts!(struct Irqs {
     PIO0_IRQ_0 => InterruptHandler<PIO0>;
+    DMA_IRQ_0 => dma::InterruptHandler<DMA_CH0>;
 });
 
 #[embassy_executor::task]
 async fn cyw43_task(
-    runner: cyw43::Runner<'static, Output<'static>, PioSpi<'static, PIO0, 0, DMA_CH0>>,
+    runner: cyw43::Runner<'static, cyw43::SpiBus<Output<'static>, PioSpi<'static, PIO0, 0>>>,
 ) -> ! {
     runner.run().await
 }
@@ -73,6 +76,9 @@ async fn main(spawner: Spawner) -> () {
     info!("main");
     let p = embassy_rp::init(Default::default());
     let r = split_resources!(p);
+
+    let telemetry_channel = TELEMETRY_CHANNEL.init(TelemetryChannel::new());
+    let telemetry_receiver = telemetry_channel.receiver();
 
     // Find the UTILITY section containing separately-loaded config data
     unsafe extern "C" {
@@ -97,13 +103,12 @@ async fn main(spawner: Spawner) -> () {
     let pw: &[u8] = config
         .get_value_by_key("PW".as_bytes())
         .expect("PW existence");
-    let fw: &[u8] = config.get_blob_by_id(1).expect("fw existence");
-    let clm: &[u8] = config.get_blob_by_id(2).expect("clm existence");
-    //  let nvram: &[u8] = config.get_blob_by_id(3).expect("nvram existence");
+    let fw = config.get_blob_by_id::<A4>(1).expect("fw existence");
+    let clm = config.get_blob_by_id::<A4>(2).expect("clm existence");
+    let nvram = config.get_blob_by_id::<A4>(3).expect("nvram existence");
 
-    spawner
-        .spawn(main_rp(spawner, r.switching, TELEMETRY_CHANNEL.sender()))
-        .expect("Main switcher task");
+    // Establish the core application: switching aux equipment
+    spawner.spawn(main_rp(spawner, r.switching).expect("Main switcher task"));
 
     let pwr = Output::new(p.PIN_23, Level::Low);
     let cs = Output::new(p.PIN_25, Level::High);
@@ -116,19 +121,17 @@ async fn main(spawner: Spawner) -> () {
         cs,
         p.PIN_24,
         p.PIN_29,
-        p.DMA_CH0,
+        dma::Channel::new(p.DMA_CH0, Irqs),
     );
 
     static STATE: StaticCell<cyw43::State> = StaticCell::new();
     let state = STATE.init(cyw43::State::new());
-    let (net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw).await;
-    spawner.spawn(cyw43_task(runner)).expect("spawn cyw43_task");
+    let (net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw, nvram).await;
+    spawner.spawn(cyw43_task(runner).expect("spawn cyw43_task"));
     control.init(clm).await;
     control
         .set_power_management(cyw43::PowerManagementMode::PowerSave)
         .await;
-
-    let telemetry_receiver = TELEMETRY_CHANNEL.receiver();
 
     // BEGIN NETWORK SETUP BLOCK
     let config = Config::dhcpv4(Default::default());
@@ -142,21 +145,30 @@ async fn main(spawner: Spawner) -> () {
         seed,
     );
     // END NETWORK SETUP BLOCK
+    let flash = Flash::<_, _, FLASH_SIZE>::new_blocking(p.FLASH);
+    let flash = Mutex::new(RefCell::new(flash));
 
-    // The motorcycle switch manager expects to do networking very
-    // rarely, via a Vulcan-pinch of some kind when firmware update is
-    // needed or telemetry is of interest (temperature of the bike's
-    // voltage regulator for example). In most runs this loop will wait
-    // at this receive() operation until power-off.
-    let operation = telemetry_receiver.receive().await;
+    let config = FirmwareUpdaterConfig::from_linkerfile_blocking(&flash, &flash);
+    let mut aligned = AlignedBuffer([0; 1]);
+    let mut updater = BlockingFirmwareUpdater::new(config, &mut aligned.0);
 
-    // Delay this until network is requested. Saves dhcp operations when link is
+    if ! matches!(updater.get_state().expect("DFU get_state"), State::Boot) {
+        updater.mark_booted().unwrap();
+    }
+
+    //////////////////////////////////////////////////////////////////////////////
+    // The motorcycle switch manager expects to do networking very rarely,      //
+    // triggered by a Vulcan-pinch of some kind when firmware update is needed  //
+    // or telemetry is of interest (temperature of the bike's voltage regulator //
+    // for example). In most runs this funtion will wait here until power-off.  //
+    //////////////////////////////////////////////////////////////////////////////
+    telemetry_receiver.receive().await;
+
+    // Delayed until network is requested. Saves dhcp operations when link is
     // down. Another application, one that expects to do networking on an
     // ongoing basis, would start this earlier and look for operation requests
     // in a loop, but we don't need to loop.
-    spawner
-        .spawn(net_task(runner))
-        .expect("spawn net_task(runner)");
+    spawner.spawn(net_task(runner).expect("spawn net_task(runner)"));
 
     // TODO: Put a pulser on the indicators, overriding all else.
     // RGB black
@@ -168,7 +180,7 @@ async fn main(spawner: Spawner) -> () {
     'outer: loop {
         for _i in 0..5 {
             if let Err(err) = control.join(ap, JoinOptions::new(pw)).await {
-                info!("join ssid {:?} failed: {:?}", ap, err.status);
+                info!("join ssid {:?} failed: {:?}", ap, err);
                 continue;
             }
             info!("Connected to access point {:?}", ap);
@@ -188,23 +200,17 @@ async fn main(spawner: Spawner) -> () {
     // END NETWORKING_SETUP
 
     // from here, green RGB blinks off when network operations are in .await
-    match operation {
-        TelemetryOperation::Run(_) => {
-            /*
-                        // take_indicators();
-                        if connect() {
-                            indicators_sending();
-                            send_telemetry();
-                            indicators_retrieving();
-                            if retrieve_dfu_state() {
-                                retrieve_and_write_dfu();
-                                reset();
-                            }
-                        }
-                        release_indicators();
-            */
-        }
-    }
+    // take_indicators();
+    // if connect() {
+    // indicators_sending();
+    // send_telemetry();
+    // indicators_retrieving();
+    // if retrieve_dfu_state() {
+    //   retrieve_and_write_dfu();
+    // reset();
+    //   }
+    // }
+    // release_indicators();
 
     // Motorcycle: reset the controller after one network cycle.
     // Other uses would want other action.

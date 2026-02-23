@@ -1,15 +1,21 @@
 #![no_std]
 
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::Channel;
+use embassy_sync::channel::Sender;
+use embassy_time::{Duration, Timer};
+use watchdog::WatchdogReport;
+
+pub const TELEMETRY_CHANNEL_DEPTH: usize = 2;
 
 pub enum TelemetryOperation {
     Run(u32),
 }
 
-pub const TELEMETRY_CHANNEL_DEPTH: usize = 5;
-pub static TELEMETRY_CHANNEL: Channel<
-    CriticalSectionRawMutex,
-    TelemetryOperation,
-    TELEMETRY_CHANNEL_DEPTH,
-> = Channel::new();
+impl TelemetryOperation {
+    pub async fn run(watchdog_channel: &mut Sender<'static, CriticalSectionRawMutex, (), TELEMETRY_CHANNEL_DEPTH>, watchdog_pulse: &Duration) -> ! {
+        loop {
+            watchdog_channel.send(WatchdogReport::Telemetry);
+            Timer::after(watchdog_pulse).await;
+        }
+    }
+}
+
