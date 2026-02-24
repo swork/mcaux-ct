@@ -152,7 +152,7 @@ async fn main(spawner: Spawner) -> () {
     let mut aligned = AlignedBuffer([0; 1]);
     let mut updater = BlockingFirmwareUpdater::new(config, &mut aligned.0);
 
-    if ! matches!(updater.get_state().expect("DFU get_state"), State::Boot) {
+    if !matches!(updater.get_state().expect("DFU get_state"), State::Boot) {
         updater.mark_booted().unwrap();
     }
 
