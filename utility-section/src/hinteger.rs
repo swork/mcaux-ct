@@ -25,7 +25,7 @@ pub fn hinteger_explicit_maximum<const M: usize>(encoded: &[u8]) -> Option<(usiz
         }
         let val = b & 0x7f;
         if accum > max_accum_okay - val as usize {
-            break;  // result will overflow
+            break; // result will overflow
         }
         accum = (accum << 7) + val as usize;
     }
@@ -187,8 +187,7 @@ mod tests {
     #[test]
     fn two_thirtysecond() {
         const B: [u8; 5] = *b"\x90\x80\x80\x80\x00"; // 33 significant bits
-        let (val, addr) =
-            hinteger(&B).expect("Decodes to 33 significant bits, so panic here");
+        let (val, addr) = hinteger(&B).expect("Decodes to 33 significant bits, so panic here");
         assert_eq!(0x100000000usize, 4_294_967_296usize); // this shouldn't compile
         assert_eq!(val, 4_294_967_296usize); // nor this
         assert_eq!(addr, B.len());
