@@ -5,7 +5,6 @@ name: CI rp235x
 env:
   RUSTFLAGS: -D warnings --cap-lints warn -A direct_cast_of_function_item_into_an_integer
   RUSTDOCFLAGS: -D warnings
-  ACCESS_POINTS: ${{ secrets.ACCESS_POINTS }}
 
 jobs:
   check:
