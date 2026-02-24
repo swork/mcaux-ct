@@ -1,14 +1,15 @@
-#+TITLE: UTILITY section and configuration
-#+AUTHOR: Steve Work <steve@renlabs.com>
-#+LAYOUT: post
+---
+title: UTILITY section and configuration
+layout: post
+---
 
 I've been rolling code for a few days, with time out to pull blackberries or run scales on the trumpet or discover One More Thing to be done to the boat trailer, and enough has shown itself up that I figured I'd better do some brain dumping. And so I give you
 
-* UTILITY section and configuration
+# UTILITY section and configuration
 
 embassy-rs promises among other things a bare-metal bootloader, embassy-boot, which given a properly provisioned device supports downloading (somehow) a Device Firmware Update blob and booting to it, and if it doesn't run well enough to get to the point of saying "Hey I'm good" arranging that a watchdog reverts to the previous, presumably working, version. Pretty cool. BUT...
 
-** "the horror - the horror"
+## "the horror - the horror"
 
 When I started my retired-guy embedded systems catchup process I built some dataloggers using micro-Python. It took a little bit of doing, as uPython wants you to learn how to rebuild it to add modules. But it offered a REPL command line; on boards with radios you can access it over the air. Tweaking the software was trivial.
 
@@ -22,7 +23,7 @@ The language itself is about leveraging the huge corpus of understanding of what
 
 Multiply that language bias - difficulty now in service of ease later - by the inherent hassle of programming bare metal, and you might start to see why I'm finding this space satisfying. Running code through continuous-integration processes mostly eliminates remembering steps months later, and even if I lose the thread between deployment in April and discovering a need for adjustments in August there's relatively little I can do to break a running system that wouldn't fall afoul of the compiler. My promise to myself is that time spent here and now will pay off later: Future Steve can go sailing, his little systems will continue to chug. Probably a fantasy of immortality.
 
-** Where it meets the road
+## Where it meets the road
 
 Some weeks ago I was really close to installing a little module onto my little motorcycle to control some electrical gadgets. The box holding the micro and its power supply and bringing all the various wires together lives in front of the steering tube, near the bottom heatset bearing, and three momentary-contact switches live along with some LED indicators above it inside the fairing.
 
@@ -32,7 +33,7 @@ This wasn't terrible; the older board will inevitably become hard to find and th
 
 This possibility of course raised the priority of getting OTA DFU functioning, to avoid having to disassemble that module buried in the guts of my bike when it turns out I want it to behave differently. And THAT in turn ran into the ever-so-simple problem of managing secrets, like the SSID and password to my home wifi installation (and my phone's hotspot) in the context of expecting public CI infrastructure to be building and serving those updates.
 
-** Sshhh...
+## Sshhh...
 
 All the public builders like Github Actions support secrets management. Github's is simple and cute: you can, one time, name a secret as a key/value pair, and they promise that forevermore they won't disclose the value, not even to you. Nevermind that you can accidentally log it, duh, or in the case of configuration of credentials into bare-metal embedded applications, that the secret value will be hanging out in the compiled binary.
 
@@ -44,7 +45,7 @@ I won't detail the dead-ends I've explored, like ersatz dynamic linking to inclu
 
 I'll also avoid more than mentioning discovering SourceHut, yet another all-open-source project site like forwardemail.net that charges a subscription that covers costs including a small staff but won't make anyone rich, while exposing to scrutiny all the guts of the operation - clone their source repo and set up your own instance using the same software, or pay them a few dollars a month to avoid the hassle. (I'm noodling that model for a project of my own.) So far =mcaux-ct= is the only repo I'm hosting locally and using git-hooks to spray changes out to both SourceHut and GitHub, letting them do the build work and mitigating the risk either of them dies or changes terms of service in some way detrimental to me and unanticipated, but I expect to echo this model for other work.
 
-** State of the upshot
+## State of the upshot
 
 I'm working against impulse to find a balance between Feeling Satisfied and Getting It Done, and right now that means focusing on the latter. =cargo-utility-section= could certainly take a built ELF binary as input and sort out the utility-section load address itself, but gosh darn it I'm not going to do that yet - objdump and a command-line specifier will have to do for now. It appears the next step is to rebuild the hardware I fried earlier (including some lessons learned, like switching pulled-up inputs low rather than pulsing them with whatever voltage the moto is making ATM, conditioned with Zeners) - (though I can't avoid that for one input, the high-beam sensor that will gate driving lights).
 
