@@ -1,0 +1,3 @@
+# Embassy-rp in git tree triggers a lint, which CI promotes to an error. Suppress it.
+[build]
+rustflags = ["-A", "function-casts-as-integer"]

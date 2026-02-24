@@ -3,8 +3,7 @@ on: [push, pull_request, workflow_dispatch]
 name: CI rp235x
 
 env:
-  # embassy-rs at github HEAD triggers a lint. Don't promote warnings for these builds, for now.
-  RUSTFLAGS: -A direct_cast_of_function_item_into_an_integer
+  RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
 
 jobs:
