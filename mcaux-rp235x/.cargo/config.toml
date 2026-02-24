@@ -6,6 +6,7 @@ runner = [ "arm-none-eabi-gdb","-iex","targ ext /dev/ttyACM0","-iex","mon swdp",
 
 [build]
 target = "thumbv8m.main-none-eabihf"
+rustflags = ["-A", "function-casts-as-integer"]
 
 [env]
 DEFMT_LOG = "debug"
