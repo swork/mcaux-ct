@@ -12,6 +12,9 @@ name = "mcaux-rp235x"
 test = false
 bench = false
 
+[features]
+stem = []
+
 [dependencies]
 aligned = "0.4.3"
 assign-resources = "0.5.0"
@@ -31,7 +34,9 @@ embedded-storage = "0.3.1"
 embedded-storage-async = "0.4.1"
 mcaux = { version="0.1.0", path="../mcaux", features = ["rp235xa"]}
 panic-probe = { version = "1.0.0", features = ["defmt"] }
+reqwless = { version = "0.14.0", default-features = false, features = ["defmt"] }
 static_cell = "2.1.1"
 utility-section = { version = "0.1.0", path = "../utility-section" }
+zerocopy = "0.8.39"
 
 

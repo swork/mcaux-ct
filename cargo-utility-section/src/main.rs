@@ -1,5 +1,5 @@
 use anyhow::{anyhow, bail, Context, Result};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use clap_cargo;
 use clap_verbosity;
 use exec;
@@ -11,10 +11,12 @@ use std::mem;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use thiserror::Error;
-use utility_section::encode::hinteger_encode;
+
+mod encode;
+use crate::encode::hinteger_encode;
 
 #[derive(Clone, Debug)]
-struct BlobSpec {
+pub struct BlobSpec {
     /// Blob ID value
     id: usize,
 
@@ -28,45 +30,54 @@ struct BlobSpec {
 // TODO: take app.elf on command line and a symbol like __utility_block_addr
 // and search the file to get the associated address.
 
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None, styles = clap_cargo::style::CLAP_STYLING)]
-struct Cli {
-    /// Output file; extension determines format
-    #[arg(short, long, default_value = "./utility.ihex")]
-    outfile: PathBuf,
+#[derive(Parser)]
+#[command(version, about, long_about = None, styles = clap_cargo::style::CLAP_STYLING)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub thing_to_do: CmdUtilitySection,
+}
 
-    /// Address at which to load the generated utility section block. I find
-    /// this with ...-objdump -t ...app.elf, and search for the utility section
-    /// symbol (__utility_block_addr in my use). This is a hex string in C-literal
-    /// format, 0x12345678, passed straight through to objcopy.
-    #[arg(long, short)]
-    load_address: String,
+#[derive(Subcommand)]
+pub enum CmdUtilitySection {
+    UtilitySection {
 
-    /// Upper limit on string item length. Safety says, make this match
-    /// parameter N in utility_section::decode; but it's just a check on actual
-    /// string lengths here.
-    #[arg(long, default_value = "64" )]
-    maximum_string_length: usize,
+        /// Output file; extension determines format
+        #[arg(short, long, default_value = "./utility.ihex")]
+        outfile: PathBuf,
 
-    /// String to include in the utility-section encoding
-    #[arg(short, long)]
-    string: Vec<String>,
+        /// Address at which to load the generated utility section block. I find
+        /// this with ...-objdump -t ...app.elf, and search for the utility section
+        /// symbol (__utility_block_addr in my use). This is a hex string in C-literal
+        /// format, 0x12345678, passed straight through to objcopy.
+        #[arg(long, short)]
+        load_address: String,
 
-    // Blobs to include in the encoding
-    #[arg(short, long, value_parser = parse_blob_spec, value_name = "[ID,]FILENAME[,ALIGN]")]
-    blob: Vec<BlobSpec>,
+        /// Upper limit on string item length. Safety says, make this match
+        /// parameter N in utility_section::decode; but it's just a check on actual
+        /// string lengths here.
+        #[arg(long, default_value = "64" )]
+        maximum_string_length: usize,
 
-    // Cargo boilerplate
-    #[command(flatten)]
-    manifest: clap_cargo::Manifest,
-    #[command(flatten)]
-    workspace: clap_cargo::Workspace,
-    #[command(flatten)]
-    features: clap_cargo::Features,
+        /// String to include in the utility-section encoding
+        #[arg(short, long)]
+        string: Vec<String>,
 
-    // Verbosity boilerplate
-    #[command(flatten)]
-    verbosity: clap_verbosity::Verbosity,
+        // Blobs to include in the encoding
+        #[arg(short, long, value_parser = parse_blob_spec, value_name = "[ID,]FILENAME[,ALIGN]")]
+        blob: Vec<BlobSpec>,
+
+        // Cargo boilerplate
+        #[command(flatten)]
+        manifest: clap_cargo::Manifest,
+        #[command(flatten)]
+        workspace: clap_cargo::Workspace,
+        #[command(flatten)]
+        features: clap_cargo::Features,
+
+        // Verbosity boilerplate
+        #[command(flatten)]
+        verbosity: clap_verbosity::Verbosity,
+    },
 }
 
 #[derive(Error, Debug)]
@@ -125,17 +136,29 @@ fn parse_blob_spec(arg: &str) -> Result<BlobSpec> {
 
 fn main() -> Result<ExitCode> {
     let args = Cli::parse();
-    let mut tmp_path = args.outfile.clone();
+    let CmdUtilitySection::UtilitySection {
+        outfile,
+        string,
+        blob,
+        load_address,
+        maximum_string_length: _,
+        manifest: _,
+        workspace: _,
+        features: _,
+        verbosity: _,
+    } = args.thing_to_do;
+
+    let mut tmp_path = outfile.clone();
     tmp_path.add_extension("tmp");
     let mut tempfile = File::create(&tmp_path).with_context(|| { format!("creating file {}", tmp_path.display())})?;
 
-    for s in args.string {
+    for s in string {
         tempfile.write(&hinteger_encode(s.len()))?;
         tempfile.write(s.as_bytes())?;
     }
     tempfile.write_all(&hinteger_encode(0))?;  // end of strings
 
-    for b in args.blob {
+    for b in blob {
         let mut blobfile = File::open(&b.blob).with_context(|| { format!("opening blobfile {}", b.blob.display())})?;
         tempfile.write(&hinteger_encode(blobfile.seek(SeekFrom::End(0))?.try_into().unwrap()))?;
         tempfile.write(&hinteger_encode(b.id))?;
@@ -156,15 +179,15 @@ fn main() -> Result<ExitCode> {
     tempfile.write_all(&hinteger_encode(0))?;  // end of blobs
     mem::drop(tempfile);
 
-    exec::Command::new("arm-none-eabi-objcopy")
+    let _ = exec::Command::new("arm-none-eabi-objcopy")
         .arg("--input")
         .arg("binary")
         .arg("--output")
         .arg("ihex")
         .arg(tmp_path.clone())
-        .arg(args.outfile.clone())
+        .arg(outfile.clone())
         .arg("--change-section-lma")
-        .arg(format!("*={}", args.load_address))
+        .arg(format!("*={}", load_address))
         .exec();
     bail!("cargo objcopy failed");
 }

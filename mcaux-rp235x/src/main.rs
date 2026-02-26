@@ -5,11 +5,13 @@ use aligned::A4;
 use core::cell::RefCell;
 use cyw43::JoinOptions;
 use cyw43_pio::{DEFAULT_CLOCK_DIVIDER, PioSpi};
-use defmt::info;
+use defmt::{info, warn, error};
 use defmt_rtt as _;
 use embassy_boot::{AlignedBuffer, BlockingFirmwareUpdater, FirmwareUpdaterConfig, State};
 use embassy_executor::Spawner;
 use embassy_net::{Config, StackResources};
+use embassy_net::dns::DnsSocket;
+use embassy_net::tcp::client::{TcpClient, TcpClientState};
 use embassy_rp::clocks::RoscRng;
 use embassy_rp::flash::Flash;
 use embassy_rp::gpio::{Level, Output};
@@ -22,15 +24,14 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use mcaux::{AssignedResources, SwitchingResources, main_rp, split_resources};
 use panic_probe as _;
+use reqwless::client::HttpClient;
+use reqwless::request::Method;
 use static_cell::StaticCell;
 use utility_section::conf;
+use zerocopy::IntoBytes;
 
 // rp235x has 4MB storage
 const FLASH_SIZE: usize = 4 * 1024 * 1024;
-
-const TELEMETRY_CHANNEL_DEPTH: usize = 1;
-type TelemetryChannel = Channel<CriticalSectionRawMutex, (), TELEMETRY_CHANNEL_DEPTH>;
-static TELEMETRY_CHANNEL: StaticCell<TelemetryChannel> = StaticCell::new();
 
 /*
 #[unsafe(link_section = ".bi_entries")]
@@ -73,12 +74,14 @@ async fn cyw43_task(
 /// between them.
 #[embassy_executor::main]
 async fn main(spawner: Spawner) -> () {
-    info!("main");
+    if cfg!(feature = "stem") {
+        info!("stem");
+    } else {
+        info!("main");
+    }
+
     let p = embassy_rp::init(Default::default());
     let r = split_resources!(p);
-
-    let telemetry_channel = TELEMETRY_CHANNEL.init(TelemetryChannel::new());
-    let telemetry_receiver = telemetry_channel.receiver();
 
     // Find the UTILITY section containing separately-loaded config data
     unsafe extern "C" {
@@ -94,21 +97,47 @@ async fn main(spawner: Spawner) -> () {
     };
     // param is max item count, strings plus blobs
     let config: conf::Conf<8> = conf::Conf::new(utility_section);
-    let ap: &str = str::from_utf8(
+    let dfu: &str = str::from_utf8(
         config
-            .get_value_by_key("AP".as_bytes())
-            .expect("AP existence"),
-    )
-    .expect("utf8");
-    let pw: &[u8] = config
-        .get_value_by_key("PW".as_bytes())
-        .expect("PW existence");
+            .get_value_by_key("DFU".as_bytes())
+            .expect("DFU existence"))
+        .expect("utf8");
+    let mut ap = [""; 5];
+    let mut pw = ["".as_bytes(); 5];
+    for i in 0usize..5 {
+        let key = [b'A', b'P', b'0' + i as u8];
+        if let Some(ap_name) = config.get_value_by_key(&key) {
+            ap[i] = str::from_utf8(ap_name.as_bytes()).expect("utf8");
+            let key = [b'P', b'W', b'0' + i as u8];
+            pw[i] = config.get_value_by_key(&key).expect("existence");
+        } else {
+            break;
+        }
+    }
+
     let fw = config.get_blob_by_id::<A4>(1).expect("fw existence");
     let clm = config.get_blob_by_id::<A4>(2).expect("clm existence");
     let nvram = config.get_blob_by_id::<A4>(3).expect("nvram existence");
 
-    // Establish the core application: switching aux equipment
-    spawner.spawn(main_rp(spawner, r.switching).expect("Main switcher task"));
+    if !cfg!(feature = "stem") {
+        const TELEMETRY_CHANNEL_DEPTH: usize = 1;
+        type TelemetryChannel = Channel<CriticalSectionRawMutex, (), TELEMETRY_CHANNEL_DEPTH>;
+        static TELEMETRY_CHANNEL: StaticCell<TelemetryChannel> = StaticCell::new();
+
+        let telemetry_channel = TELEMETRY_CHANNEL.init(TelemetryChannel::new());
+        let telemetry_receiver = telemetry_channel.receiver();
+
+        // Establish the core application: switching aux equipment
+        spawner.spawn(main_rp(spawner, r.switching).expect("Main switcher task"));
+
+        //////////////////////////////////////////////////////////////////////////////
+        // The motorcycle switch manager expects to do networking very rarely,      //
+        // triggered by a Vulcan-pinch of some kind when firmware update is needed  //
+        // or telemetry is of interest (temperature of the bike's voltage regulator //
+        // for example). In most runs this funtion will wait here until power-off.  //
+        //////////////////////////////////////////////////////////////////////////////
+        telemetry_receiver.receive().await;
+    }
 
     let pwr = Output::new(p.PIN_23, Level::Low);
     let cs = Output::new(p.PIN_25, Level::High);
@@ -156,14 +185,6 @@ async fn main(spawner: Spawner) -> () {
         updater.mark_booted().unwrap();
     }
 
-    //////////////////////////////////////////////////////////////////////////////
-    // The motorcycle switch manager expects to do networking very rarely,      //
-    // triggered by a Vulcan-pinch of some kind when firmware update is needed  //
-    // or telemetry is of interest (temperature of the bike's voltage regulator //
-    // for example). In most runs this funtion will wait here until power-off.  //
-    //////////////////////////////////////////////////////////////////////////////
-    telemetry_receiver.receive().await;
-
     // Delayed until network is requested. Saves dhcp operations when link is
     // down. Another application, one that expects to do networking on an
     // ongoing basis, would start this earlier and look for operation requests
@@ -178,16 +199,18 @@ async fn main(spawner: Spawner) -> () {
     // TODO Loop over several: home wifi, my phone's hotspot
     #[allow(clippy::never_loop)]
     'outer: loop {
-        for _i in 0..5 {
-            if let Err(err) = control.join(ap, JoinOptions::new(pw)).await {
-                info!("join ssid {:?} failed: {:?}", ap, err);
-                continue;
+        for i in 0usize..5 {
+            if ap[i].len() > 0 {
+                if let Err(err) = control.join(ap[i], JoinOptions::new(pw[i])).await {
+                    info!("join ssid {:?} failed: {:?}", ap, err);
+                    continue;
+                }
+                info!("Connected to access point {:?}", ap);
+                break 'outer;
             }
-            info!("Connected to access point {:?}", ap);
-            break 'outer;
         }
         // RGB red
-        panic!("No access point connection succeeded");
+        warn!("No access point connection succeeded so far");
     }
 
     // RGB blue
@@ -198,6 +221,22 @@ async fn main(spawner: Spawner) -> () {
     // RGB green
     info!("Stack is up!");
     // END NETWORKING_SETUP
+
+    // TEMP just retrieve a URL, anything
+    let mut rx_buffer = [0; 4096];
+    let client_state = TcpClientState::<1, 4096, 4096>::new();
+    let tcp_client = TcpClient::new(stack, &client_state);
+    let dns_client = DnsSocket::new(stack);
+    let mut http_client = HttpClient::new(&tcp_client, &dns_client);
+
+    if let Ok(mut request) = http_client.request(Method::GET, dfu).await {
+        if let Ok(response) = request.send(&mut rx_buffer).await {
+            info!("Response status: {}", response.status.0);
+        } else {
+            error!("Failed to send HTTP request");
+        }
+        error!("Failed to create HTTP request.");
+    }
 
     // from here, green RGB blinks off when network operations are in .await
     // take_indicators();

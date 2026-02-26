@@ -19,10 +19,10 @@ impl<'a, const N: usize> Conf<'a, N> {
         Self { items, section }
     }
 
-    pub fn get_value_by_key(&self, key: &'a [u8]) -> Option<&'a [u8]> {
+    pub fn get_value_by_key(&self, key: &[u8]) -> Option<&'a [u8]> {
         for item in self.items.iter() {
             if let decode::UtilityItem::String { offset, length } = item {
-                let end = *offset + key.len();
+                let end = *offset + &key.len();
                 let v = &self.section[*offset..end];
                 if v == key {
                     return Some(&self.section[*offset + end + 1..*offset + end + 1 + length]);
