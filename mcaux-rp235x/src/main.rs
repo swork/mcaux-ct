@@ -1,6 +1,12 @@
 #![no_std]
 #![no_main]
 
+#[cfg(all(feature = "rp2040", feature = "rp235xa"))]
+compile_error!("feature \"rp2040\" and feature \"rp235xa\" must not both be specified");
+
+#[cfg(not(any(feature = "rp2040", feature = "rp235xa")))]
+compile_error!("one or the other of feature \"rp2040\" and \"rp235xa\" must be specified");
+
 use aligned::A4;
 use core::cell::RefCell;
 use cyw43::JoinOptions;
@@ -29,30 +35,10 @@ use static_cell::StaticCell;
 use utility_section::conf;
 use zerocopy::IntoBytes;
 
-// rp235x has 4MB storage
+#[cfg(feature = "rp235xa")]
 const FLASH_SIZE: usize = 4 * 1024 * 1024;
-
-/*
-#[unsafe(link_section = ".bi_entries")]
-#[used]
-pub static PICOTOOL_ENTRIES: [embassy_rp::binary_info::EntryAddr; 4] = [
-    embassy_rp::binary_info::rp_program_name!(c"swork/mcaux-ct"),
-    embassy_rp::binary_info::rp_program_description!(
-        c"Momentary contact switching for motorcycle aux equipment"
-    ),
-    embassy_rp::binary_info::rp_cargo_version!(),
-    embassy_rp::binary_info::rp_program_build_attribute!(),
-];
-*/
-
-/*  For when "use panic_probe as _;" is not enabled above.
-#[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
-    defmt::error!("Panic occurred: {:?}", defmt::Display2Format(info));
-    // whatever else to do
-    loop {} // Halt the program
-}
-*/
+#[cfg(feature = "rp2040")]
+const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
 // from wifi_blinky, setup to twiddle the PicoW LED (and for that matter to use
 // the wifi subsystem at all)
