@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 embassy-sync = { version = "0.7.2", path = "../embassy/embassy-sync" }
+embassy-time = { version = "0.5.0", path = "../embassy/embassy-time" }
