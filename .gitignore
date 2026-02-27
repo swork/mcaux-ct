@@ -21,14 +21,11 @@ target_wasm
 # CI failures - is this a fix?
 Cargo.lock
 
-# secrets
-mcaux-rp235x/access_points.*
-
 # probe-rs artifacts
-mcaux-rp235x/logs
+mcaux-app/logs
 
-# This is a symlink selecting a memory map. I don't want it in SCM.
-mcaux-rp235x/memory.x
+# This is selected at build time, not to be committed
+mcaux-app/memory.x
 
 # Build products
 stem.elf
@@ -36,5 +33,4 @@ utility.bin
 utility.ihex
 
 # Added by cargo
-
 /target

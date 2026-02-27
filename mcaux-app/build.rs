@@ -6,7 +6,11 @@ fn main() {
     let out = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     println!("cargo:rustc-link-search={}", out.display());
 
-    let memory_x = include_bytes!("memory.x");
+    #[cfg(feature = "rp235xa")]
+    let memory_x = include_bytes!("memory-rp235xa.x");
+    #[cfg(feature = "rp2040")]
+    let memory_x = include_bytes!("memory-rp2040.x");
+
     let mut f = File::create(out.join("memory.x")).unwrap();
     f.write_all(memory_x).unwrap();
     println!("cargo:rerun-if-changed=memory.x");
