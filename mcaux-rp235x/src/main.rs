@@ -12,15 +12,14 @@ use embassy_executor::Spawner;
 use embassy_net::{Config, StackResources};
 use embassy_net::dns::DnsSocket;
 use embassy_net::tcp::client::{TcpClient, TcpClientState};
+use embassy_rp::{bind_interrupts, dma};
 use embassy_rp::clocks::RoscRng;
 use embassy_rp::flash::Flash;
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, PIO0};
 use embassy_rp::pio::{InterruptHandler, Pio};
-use embassy_rp::{bind_interrupts, dma};
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-#[allow(unused)]
 use embassy_sync::channel::Channel;
 use mcaux::{AssignedResources, SwitchingResources, main_rp, split_resources};
 use panic_probe as _;
@@ -183,8 +182,7 @@ async fn main(spawner: Spawner) -> () {
     let mut aligned = AlignedBuffer([0; 1]);
     let mut updater = BlockingFirmwareUpdater::new(config, &mut aligned.0);
 
-    #[not(cfg(feature = "stem"))]
-    if !matches!(updater.get_state().expect("DFU get_state"), State::Boot) {
+    if !cfg!(feature = "stem") && !matches!(updater.get_state().expect("DFU get_state"), State::Boot) {
         updater.mark_booted().unwrap();
     }
 

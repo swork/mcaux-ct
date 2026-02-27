@@ -1,28 +1,38 @@
 #![no_std]
 #![no_main]
 
+use aligned::A4;
+use core::cell::RefCell;
 use cyw43::JoinOptions;
 use cyw43_pio::{DEFAULT_CLOCK_DIVIDER, PioSpi};
-#[allow(unused)]
-use defmt::info;
+use defmt::{info, warn, error};
 use defmt_rtt as _;
+use embassy_boot::{AlignedBuffer, BlockingFirmwareUpdater, FirmwareUpdaterConfig, State};
 use embassy_executor::Spawner;
 use embassy_net::{Config, StackResources};
-use embassy_rp::bind_interrupts;
+use embassy_net::dns::DnsSocket;
+use embassy_net::tcp::client::{TcpClient, TcpClientState};
+use embassy_rp::{bind_interrupts, dma};
 use embassy_rp::clocks::RoscRng;
+use embassy_rp::flash::Flash;
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, PIO0};
 use embassy_rp::pio::{InterruptHandler, Pio};
+use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::channel::Channel;
 use mcaux::{AssignedResources, SwitchingResources, main_rp, split_resources};
+use panic_probe as _;
+use reqwless::client::HttpClient;
+use reqwless::request::Method;
 use static_cell::StaticCell;
-#[allow(unused)]
-use telemetry::{TELEMETRY_CHANNEL, TelemetryOperation};
 use utility_section::conf;
+use zerocopy::IntoBytes;
 
 // rp2040 has 2MB storage
-#[allow(unused)]
 const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
+/*
 #[unsafe(link_section = ".bi_entries")]
 #[used]
 pub static PICOTOOL_ENTRIES: [embassy_rp::binary_info::EntryAddr; 4] = [
@@ -40,16 +50,18 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     // whatever else to do
     loop {} // Halt the program
 }
+*/
 
 // from wifi_blinky, setup to twiddle the PicoW LED (and for that matter to use
 // the wifi subsystem at all)
 bind_interrupts!(struct Irqs {
     PIO0_IRQ_0 => InterruptHandler<PIO0>;
+    DMA_IRQ_0 => dma::InterruptHandler<DMA_CH0>;
 });
 
 #[embassy_executor::task]
 async fn cyw43_task(
-    runner: cyw43::Runner<'static, Output<'static>, PioSpi<'static, PIO0, 0, DMA_CH0>>,
+    runner: cyw43::Runner<'static, cyw43::SpiBus<Output<'static>, PioSpi<'static, PIO0, 0>>>,
 ) -> ! {
     runner.run().await
 }
@@ -59,6 +71,11 @@ async fn cyw43_task(
 /// between them.
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    if cfg!(feature = "stem") {
+        info!("stem");
+    } else {
+        info!("main");
+    }
     let p = embassy_rp::init(Default::default());
     let r = split_resources!(p);
 
@@ -67,7 +84,7 @@ async fn main(spawner: Spawner) {
         static __utility_start: u8;
     }
     static UTILITY_SECTION_PTR: StaticCell<*const u8> = StaticCell::new();
-    let temp_len = 1911usize * 1024usize; // TODO: get this from memory map, __utility_end, whatever
+    let temp_len = 256usize * 1024usize; // TODO: get this from memory map, __utility_end, whatever
     let utility_section: &[u8] = unsafe {
         core::slice::from_raw_parts(
             *UTILITY_SECTION_PTR.init(&__utility_start as *const u8),
@@ -75,23 +92,50 @@ async fn main(spawner: Spawner) {
         )
     };
     // param is max item count, strings plus blobs
-    let config: conf::Conf<8> = conf::Conf::new(utility_section);
-    let ap: &str = str::from_utf8(
+    let config: conf::Conf<15> = conf::Conf::new(utility_section);
+    let dfu: &str = str::from_utf8(
         config
-            .get_value_by_key("AP".as_bytes())
-            .expect("AP existence"),
-    )
-    .expect("utf8");
-    let pw: &[u8] = config
-        .get_value_by_key("PW".as_bytes())
-        .expect("PW existence");
-    let fw: &[u8] = config.get_blob_by_id(1).expect("fw existence");
-    let clm: &[u8] = config.get_blob_by_id(2).expect("clm existence");
-    //  let nvram: &[u8] = config.get_blob_by_id(3).expect("nvram existence");
+            .get_value_by_key("DFU".as_bytes())
+            .expect("DFU existence"))
+        .expect("utf8");
+    let mut ap = [""; 5];
+    let mut pw = ["".as_bytes(); 5];
+    for i in 0usize..5 {
+        let key = [b'A', b'P', b'0' + i as u8];
+        if let Some(ap_name) = config.get_value_by_key(&key) {
+            ap[i] = str::from_utf8(ap_name.as_bytes()).expect("utf8");
+            let key = [b'P', b'W', b'0' + i as u8];
+            pw[i] = config.get_value_by_key(&key).expect("existence");
+        } else {
+            break;
+        }
+    }
 
-    spawner
-        .spawn(main_rp(spawner, r.switching, TELEMETRY_CHANNEL.sender()))
-        .expect("Main switcher task");
+    let fw = config.get_blob_by_id::<A4>(1).expect("fw existence");
+    let clm = config.get_blob_by_id::<A4>(2).expect("clm existence");
+    let nvram = config.get_blob_by_id::<A4>(3).expect("nvram existence");
+
+    if !cfg!(feature = "stem") {
+        const TELEMETRY_CHANNEL_DEPTH: usize = 1;
+        type TelemetryChannel = Channel<CriticalSectionRawMutex, (), TELEMETRY_CHANNEL_DEPTH>;
+        static TELEMETRY_CHANNEL: StaticCell<TelemetryChannel> = StaticCell::new();
+
+        let telemetry_channel = TELEMETRY_CHANNEL.init(TelemetryChannel::new());
+        let telemetry_receiver = telemetry_channel.receiver();
+
+        // Establish the core application: switching aux equipment
+        spawner
+            .spawn(main_rp(spawner, r.switching)
+                   .expect("Main switcher task"));
+
+        //////////////////////////////////////////////////////////////////////////////
+        // The motorcycle switch manager expects to do networking very rarely,      //
+        // triggered by a Vulcan-pinch of some kind when firmware update is needed  //
+        // or telemetry is of interest (temperature of the bike's voltage regulator //
+        // for example). In most runs this funtion will wait here until power-off.  //
+        //////////////////////////////////////////////////////////////////////////////
+        telemetry_receiver.receive().await;
+    }
 
     let pwr = Output::new(p.PIN_23, Level::Low);
     let cs = Output::new(p.PIN_25, Level::High);
@@ -104,20 +148,17 @@ async fn main(spawner: Spawner) {
         cs,
         p.PIN_24,
         p.PIN_29,
-        p.DMA_CH0,
+        dma::Channel::new(p.DMA_CH0, Irqs),
     );
 
     static STATE: StaticCell<cyw43::State> = StaticCell::new();
     let state = STATE.init(cyw43::State::new());
-    let (net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw).await;
-    spawner.spawn(cyw43_task(runner)).expect("spawn cyw43_task");
-
+    let (net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw, nvram).await;
+    spawner.spawn(cyw43_task(runner).expect("spawn cyw43_task"));
     control.init(clm).await;
     control
         .set_power_management(cyw43::PowerManagementMode::PowerSave)
         .await;
-
-    let _telemetry_receiver = TELEMETRY_CHANNEL.receiver();
 
     // BEGIN NETWORK SETUP BLOCK
     let config = Config::dhcpv4(Default::default());
@@ -132,20 +173,23 @@ async fn main(spawner: Spawner) {
     );
     // END NETWORK SETUP BLOCK
 
-    // The motorcycle switch manager expects to do networking very
-    // rarely, via a Vulcan-pinch of some kind when firmware update is
-    // needed or telemetry is of interest (temperature of the bike's
-    // voltage regulator for example). In most runs this loop will wait
-    // at this receive() operation until power-off.
-    //    let operation = telemetry_receiver.receive().await;
+    let flash = Flash::<_, _, FLASH_SIZE>::new_blocking(p.FLASH);
+    let flash = Mutex::new(RefCell::new(flash));
+    let config = FirmwareUpdaterConfig::from_linkerfile_blocking(&flash, &flash);
+    let mut aligned = AlignedBuffer([0; 1]);
+    let mut updater = BlockingFirmwareUpdater::new(config, &mut aligned.0);
+
+    if !cfg!(feature = "stem") && !matches!(updater.get_state().expect("DFU get_state"), State::Boot) {
+        updater.mark_booted().unwrap();
+    }
 
     // Delay this until network is requested. Saves dhcp operations when link is
     // down. Another application, one that expects to do networking on an
     // ongoing basis, would start this earlier and look for operation requests
     // in a loop, but we don't need to loop.
     spawner
-        .spawn(net_task(runner))
-        .expect("spawn net_task(runner)");
+        .spawn(net_task(runner)
+        .expect("spawn net_task(runner)"));
 
     // TODO: Put a pulser on the indicators, overriding all else.
     // RGB black
@@ -155,16 +199,16 @@ async fn main(spawner: Spawner) {
     // TODO Loop over several: home wifi, my phone's hotspot
     #[allow(clippy::never_loop)]
     'outer: loop {
-        for _i in 0..5 {
-            if let Err(err) = control.join(ap, JoinOptions::new(pw)).await {
-                info!("join ssid {:?} failed: {:?}", ap, err.status);
+        for i in 0..5 {
+            if let Err(err) = control.join(ap[i], JoinOptions::new(pw[i])).await {
+                info!("join ssid {:?} failed: {:?}", ap[i], err);
                 continue;
             }
-            info!("Connected to access point {:?}", ap);
+            info!("Connected to access point {:?}", ap[i]);
             break 'outer;
         }
         // RGB red
-        panic!("No access point connection succeeded");
+        warn!("No access point connection succeeded so far");
     }
 
     // RGB blue
@@ -175,6 +219,22 @@ async fn main(spawner: Spawner) {
     // RGB green
     info!("Stack is up!");
     // END NETWORKING_SETUP
+
+    // TEMP just retrieve a URL, anything
+    let mut rx_buffer = [0; 4096];
+    let client_state = TcpClientState::<1, 4096, 4096>::new();
+    let tcp_client = TcpClient::new(stack, &client_state);
+    let dns_client = DnsSocket::new(stack);
+    let mut http_client = HttpClient::new(&tcp_client, &dns_client);
+
+    if let Ok(mut request) = http_client.request(Method::GET, dfu).await {
+        if let Ok(response) = request.send(&mut rx_buffer).await {
+            info!("Response status: {}", response.status.0);
+        } else {
+            error!("Failed to send HTTP request");
+        }
+        error!("Failed to create HTTP request.");
+    }
 
     // from here, green RGB blinks off when network operations are in .await
     /*

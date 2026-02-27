@@ -12,19 +12,29 @@ name = "mcaux-rp2040"
 test = false
 bench = false
 
+[features]
+stem = []
+
 [dependencies]
-embassy-executor = { version = "0.9.1", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
-cyw43 = { version = "0.6.0", features = ["defmt", "firmware-logs"] }
-cyw43-pio = { version = "0.9.0", features = ["defmt"] }
-
-defmt = "1.0.1"
+aligned = "0.4.3"
+assign-resources = "0.5.0"
 cortex-m-rt = "0.7.5"
-mcaux = { version="0.1.0", path="../mcaux", features = ["rp2040"]}
-static_cell = "2.1.1"
-embassy-rp = { version = "0.9.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "binary-info"] }
+cyw43 = { version = "0.6.0", features = ["defmt", "firmware-logs"], path = "../embassy/cyw43" }
+cyw43-pio = { version = "0.9.0", features = ["defmt"], path = "../embassy/cyw43-pio" }
+defmt = "1.0.1"
 defmt-rtt = "1.1.0"
-telemetry = { version = "0.1.0", path = "../telemetry" }
-embassy-net = { version = "0.8.0", features = ["proto-ipv4", "tcp", "mdns", "dns", "dhcpv4", "defmt"] }
+embassy-boot = { version = "0.6.1", features = ["defmt"], path = "../embassy/embassy-boot" }
+embassy-embedded-hal = { version = "0.5.0", path = "../embassy/embassy-embedded-hal" }
+embassy-executor = { version = "0.9.1", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"], path = "../embassy/embassy-executor" }
+embassy-net = { version = "0.8.0", features = ["proto-ipv4", "tcp", "mdns", "dns", "dhcpv4", "defmt"], path = "../embassy/embassy-net" }
+embassy-rp = { version = "0.9.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "binary-info"], path = "../embassy/embassy-rp" }
+embassy-sync = { version = "0.7.2", path = "../embassy/embassy-sync" }
+embassy-time = { version = "0.5.0" , path = "../embassy/embassy-time" }
+embedded-storage = "0.3.1"
+embedded-storage-async = "0.4.1"
+mcaux = { version="0.1.0", path="../mcaux", features = ["rp2040"]}
+panic-probe = { version = "1.0.0", features = ["defmt"] }
+reqwless = { version = "0.14.0", default-features = false, features = ["defmt"] }
+static_cell = "2.1.1"
 utility-section = { version = "0.1.0", path = "../utility-section" }
-
-
+zerocopy = "0.8.39"
