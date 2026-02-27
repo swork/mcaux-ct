@@ -148,22 +148,27 @@ fn main() -> Result<ExitCode> {
         verbosity: _,
     } = args.thing_to_do;
 
-    let mut tmp_path = outfile.clone();
-    tmp_path.add_extension("tmp");
-    let mut tempfile = File::create(&tmp_path).with_context(|| { format!("creating file {}", tmp_path.display())})?;
+    let mut bin_path = PathBuf::new();
+    let mut ihex_path = PathBuf::new();
+    if outfile.extension().unwrap() == "ihex" {
+        bin_path = outfile.clone();
+        bin_path.set_extension("bin");
+        ihex_path = outfile.clone();
+    }
+    let mut binfile = File::create(&bin_path).with_context(|| { format!("creating file {}", bin_path.display())})?;
 
     for s in string {
-        tempfile.write(&hinteger_encode(s.len()))?;
-        tempfile.write(s.as_bytes())?;
+        binfile.write(&hinteger_encode(s.len()))?;
+        binfile.write(s.as_bytes())?;
     }
-    tempfile.write_all(&hinteger_encode(0))?;  // end of strings
+    binfile.write_all(&hinteger_encode(0))?;  // end of strings
 
     for b in blob {
         let mut blobfile = File::open(&b.blob).with_context(|| { format!("opening blobfile {}", b.blob.display())})?;
-        tempfile.write(&hinteger_encode(blobfile.seek(SeekFrom::End(0))?.try_into().unwrap()))?;
-        tempfile.write(&hinteger_encode(b.id))?;
-        tempfile.write(&hinteger_encode(b.align))?;
-        let here = tempfile.seek(SeekFrom::Current(0))?;
+        binfile.write(&hinteger_encode(blobfile.seek(SeekFrom::End(0))?.try_into().unwrap()))?;
+        binfile.write(&hinteger_encode(b.id))?;
+        binfile.write(&hinteger_encode(b.align))?;
+        let here = binfile.seek(SeekFrom::Current(0))?;
         let a = 1 << b.align;
         let mut there = here & !(a - 1);
         if there < here {
@@ -171,23 +176,26 @@ fn main() -> Result<ExitCode> {
         }
         println!("here: {} there: {} a: {}", here, there, a);
         for _i in 0..(there - here) {
-            tempfile.write(&[b'>'])?;
+            binfile.write(&[b'>'])?;
         }
         blobfile.seek(SeekFrom::Start(0))?;
-        io::copy(&mut blobfile, &mut tempfile)?;
+        io::copy(&mut blobfile, &mut binfile)?;
     }
-    tempfile.write_all(&hinteger_encode(0))?;  // end of blobs
-    mem::drop(tempfile);
+    binfile.write_all(&hinteger_encode(0))?;  // end of blobs
+    mem::drop(binfile);
 
-    let _ = exec::Command::new("arm-none-eabi-objcopy")
-        .arg("--input")
-        .arg("binary")
-        .arg("--output")
-        .arg("ihex")
-        .arg(tmp_path.clone())
-        .arg(outfile.clone())
-        .arg("--change-section-lma")
-        .arg(format!("*={}", load_address))
-        .exec();
-    bail!("cargo objcopy failed");
+    if ihex_path.as_mut_os_str().len() > 0 {
+        let _ = exec::Command::new("arm-none-eabi-objcopy")
+            .arg("--input")
+            .arg("binary")
+            .arg("--output")
+            .arg("ihex")
+            .arg(bin_path)
+            .arg(ihex_path)
+            .arg("--change-section-lma")
+            .arg(format!("*={}", load_address))
+            .exec();
+        bail!("cargo objcopy failed");
+    }
+    Ok(ExitCode::SUCCESS)
 }

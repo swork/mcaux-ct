@@ -10,7 +10,7 @@ UTIL_ARGS := --load-address $(LOAD_ADDRESS) $(BLOBS)
 mcaux-rp235x: utility.ihex stem.elf $(DFU_RP235x_FULL)
 
 clean:
-	-rm -f utility.ihex stem.elf
+	-rm -f utility.ihex utility.bin stem.elf
 	-cargo clean
 
 utility.ihex:
