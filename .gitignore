@@ -30,7 +30,10 @@ mcaux-rp235x/logs
 # This is a symlink selecting a memory map. I don't want it in SCM.
 mcaux-rp235x/memory.x
 
-
+# Build products
+stem.elf
+utility.bin
+utility.ihex
 
 # Added by cargo
 
