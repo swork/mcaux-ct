@@ -148,12 +148,17 @@ fn main() -> Result<ExitCode> {
         verbosity: _,
     } = args.thing_to_do;
 
+    #[allow(unused)]
     let mut bin_path = PathBuf::new();
     let mut ihex_path = PathBuf::new();
     if outfile.extension().unwrap() == "ihex" {
         bin_path = outfile.clone();
         bin_path.set_extension("bin");
         ihex_path = outfile.clone();
+    } else if outfile.extension().unwrap() == "bin" {
+        bin_path = outfile.clone();
+    } else {
+        bail!("unknown outfile extension {:?}", outfile.extension().unwrap());
     }
     let mut binfile = File::create(&bin_path).with_context(|| { format!("creating file {}", bin_path.display())})?;
 
