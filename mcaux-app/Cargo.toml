@@ -4,13 +4,7 @@ name = "mcaux-app"
 version = "0.3.0"
 authors = ["Steve Work <steve@work.renlabs.com>"]
 license = "MIT OR Apache-2.0"
-
 publish = false
-
-[[bin]]
-name = "mcaux-app"
-test = false
-bench = false
 
 [features]
 default = ["rp235xa"]
