@@ -5,19 +5,19 @@ use aligned::A4;
 use core::cell::RefCell;
 use cyw43::JoinOptions;
 use cyw43_pio::{DEFAULT_CLOCK_DIVIDER, PioSpi};
-use defmt::{info, warn, error};
+use defmt::{error, info, warn};
 use defmt_rtt as _;
 use embassy_boot::{AlignedBuffer, BlockingFirmwareUpdater, FirmwareUpdaterConfig, State};
 use embassy_executor::Spawner;
-use embassy_net::{Config, StackResources};
 use embassy_net::dns::DnsSocket;
 use embassy_net::tcp::client::{TcpClient, TcpClientState};
-use embassy_rp::{bind_interrupts, dma};
+use embassy_net::{Config, StackResources};
 use embassy_rp::clocks::RoscRng;
 use embassy_rp::flash::Flash;
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, PIO0};
 use embassy_rp::pio::{InterruptHandler, Pio};
+use embassy_rp::{bind_interrupts, dma};
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
@@ -96,8 +96,9 @@ async fn main(spawner: Spawner) {
     let dfu: &str = str::from_utf8(
         config
             .get_value_by_key("DFU".as_bytes())
-            .expect("DFU existence"))
-        .expect("utf8");
+            .expect("DFU existence"),
+    )
+    .expect("utf8");
     let mut ap = [""; 5];
     let mut pw = ["".as_bytes(); 5];
     for i in 0usize..5 {
@@ -124,9 +125,7 @@ async fn main(spawner: Spawner) {
         let telemetry_receiver = telemetry_channel.receiver();
 
         // Establish the core application: switching aux equipment
-        spawner
-            .spawn(main_rp(spawner, r.switching)
-                   .expect("Main switcher task"));
+        spawner.spawn(main_rp(spawner, r.switching).expect("Main switcher task"));
 
         //////////////////////////////////////////////////////////////////////////////
         // The motorcycle switch manager expects to do networking very rarely,      //
@@ -179,7 +178,9 @@ async fn main(spawner: Spawner) {
     let mut aligned = AlignedBuffer([0; 1]);
     let mut updater = BlockingFirmwareUpdater::new(config, &mut aligned.0);
 
-    if !cfg!(feature = "stem") && !matches!(updater.get_state().expect("DFU get_state"), State::Boot) {
+    if !cfg!(feature = "stem")
+        && !matches!(updater.get_state().expect("DFU get_state"), State::Boot)
+    {
         updater.mark_booted().unwrap();
     }
 
@@ -187,9 +188,7 @@ async fn main(spawner: Spawner) {
     // down. Another application, one that expects to do networking on an
     // ongoing basis, would start this earlier and look for operation requests
     // in a loop, but we don't need to loop.
-    spawner
-        .spawn(net_task(runner)
-        .expect("spawn net_task(runner)"));
+    spawner.spawn(net_task(runner).expect("spawn net_task(runner)"));
 
     // TODO: Put a pulser on the indicators, overriding all else.
     // RGB black
