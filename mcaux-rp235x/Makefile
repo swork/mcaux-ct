@@ -3,7 +3,7 @@
 TARGET_RP235x := thumbv8m.main-none-eabihf
 DFU_RP235x    := mcaux-rp235x
 DFU_RP235x_FULL := target/$(TARGET_RP235x)/debug/$(DFU_RP235x)
-BLOBS := --blob "1,../embassy/cyw43-firmware/43439A0.bin" --blob "2,../embassy/cyw43-firmware/43439A0_clm.bin" --blob "3,../embassy/cyw43-firmware/nvram_rp2040.bin"
+BLOBS := --blob "1,../embassy/cyw43-firmware/43439A0.bin,2" --blob "2,../embassy/cyw43-firmware/43439A0_clm.bin,2" --blob "3,../embassy/cyw43-firmware/nvram_rp2040.bin,2"
 LOAD_ADDRESS := 0x10222000  # coordinate with memory.x - this is FLASH location
 UTIL_ARGS := --load-address $(LOAD_ADDRESS) $(BLOBS)
 

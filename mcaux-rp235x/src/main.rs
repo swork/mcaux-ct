@@ -96,7 +96,7 @@ async fn main(spawner: Spawner) -> () {
         )
     };
     // param is max item count, strings plus blobs
-    let config: conf::Conf<8> = conf::Conf::new(utility_section);
+    let config: conf::Conf<15> = conf::Conf::new(utility_section);
     let dfu: &str = str::from_utf8(
         config
             .get_value_by_key("DFU".as_bytes())
@@ -128,7 +128,9 @@ async fn main(spawner: Spawner) -> () {
         let telemetry_receiver = telemetry_channel.receiver();
 
         // Establish the core application: switching aux equipment
-        spawner.spawn(main_rp(spawner, r.switching).expect("Main switcher task"));
+        spawner
+            .spawn(main_rp(spawner, r.switching)
+                   .expect("Main switcher task"));
 
         //////////////////////////////////////////////////////////////////////////////
         // The motorcycle switch manager expects to do networking very rarely,      //
@@ -174,13 +176,14 @@ async fn main(spawner: Spawner) -> () {
         seed,
     );
     // END NETWORK SETUP BLOCK
+
     let flash = Flash::<_, _, FLASH_SIZE>::new_blocking(p.FLASH);
     let flash = Mutex::new(RefCell::new(flash));
-
     let config = FirmwareUpdaterConfig::from_linkerfile_blocking(&flash, &flash);
     let mut aligned = AlignedBuffer([0; 1]);
     let mut updater = BlockingFirmwareUpdater::new(config, &mut aligned.0);
 
+    #[not(cfg(feature = "stem"))]
     if !matches!(updater.get_state().expect("DFU get_state"), State::Boot) {
         updater.mark_booted().unwrap();
     }
@@ -202,10 +205,10 @@ async fn main(spawner: Spawner) -> () {
         for i in 0usize..5 {
             if ap[i].len() > 0 {
                 if let Err(err) = control.join(ap[i], JoinOptions::new(pw[i])).await {
-                    info!("join ssid {:?} failed: {:?}", ap, err);
+                    info!("join ssid {:?} failed: {:?}", ap[i], err);
                     continue;
                 }
-                info!("Connected to access point {:?}", ap);
+                info!("Connected to access point {:?}", ap[i]);
                 break 'outer;
             }
         }
