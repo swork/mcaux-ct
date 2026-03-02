@@ -9,7 +9,6 @@ compile_error!("one or the other of feature \"rp2040\" and \"rp235xa\" must be s
 
 use aligned::A4;
 use core::cell::RefCell;
-use cortex_m::asm;
 use cyw43::JoinOptions;
 use cyw43_pio::{DEFAULT_CLOCK_DIVIDER, PioSpi};
 use defmt::{error, info, warn};
@@ -47,6 +46,7 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     error!("Panic.");
     error!("PanicInfo, if it formats: {:?}", _info);
     cortex_m::asm::udf();
+    #[allow(unreachable_code)]  // else they complain about "-> !" above
     loop {}
 }
 
