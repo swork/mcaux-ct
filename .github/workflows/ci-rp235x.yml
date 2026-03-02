@@ -77,8 +77,6 @@ jobs:
       - run: cp target/thumbv8m.main-none-eabihf/release/mcaux-app _site/dfu/pico2w/latest/mcaux-app.elf
       - run: arm-none-eabi-objcopy -O binary -S _site/dfu/pico2w/latest/mcaux-app.elf _site/dfu/pico2w/latest/mcaux-app.bin
       - run: ls -l _site/dfu/pico2w/latest/mcaux-app.bin | awk '{print $5}' > _site/dfu/pico2w/latest/size
-      - run: ls -lR _site
-      - run: cargo metadata --format-version 1 --no-deps |jq -r '.packages[0].version'
       - run: cargo metadata --format-version 1 --no-deps |jq -r '.packages[0].version' > _site/dfu/pico2w/latest/version
 
       - name: Quick check what's getting installed
@@ -86,7 +84,7 @@ jobs:
 
       - name: upload
         id: deployment
-        uses: actions/upload-pages-artifact@v3
+        run: tar --dereference --hard-dereference --directory _site -cvf "$RUNNER_TEMP/artifact.tar" --exclude .git --exclude .github .
 
   deploy:
     environment:
