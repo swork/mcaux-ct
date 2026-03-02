@@ -103,6 +103,9 @@ tabs = [
     # { up_channel = 1, hide = true },
 ]
 
+[nogdb.gdb]
+enabled = false
+
 [default.gdb]
 # Whether or not a GDB server should be opened after flashing.
 enabled = true

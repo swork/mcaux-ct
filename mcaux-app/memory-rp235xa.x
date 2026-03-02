@@ -32,7 +32,7 @@ SECTIONS {
 SECTIONS {
   .utility_block : ALIGN(4)
   {
-    __utility_block = .;
+    __utility_block_addr = .;
     KEEP(*(.utility_block));
   } > UTILITY
 }
@@ -49,4 +49,5 @@ __bootloader_active_end = ORIGIN(FLASH) + LENGTH(FLASH) - ORIGIN(ZERO);
 __bootloader_dfu_start = ORIGIN(DFU) - ORIGIN(ZERO);
 __bootloader_dfu_end = ORIGIN(DFU) + LENGTH(DFU) - ORIGIN(ZERO);
 
-__utility_start = ORIGIN(UTILITY);
+PROVIDE(utility_block_starts_here = __utility_block_addr - ORIGIN(ZERO));
+PROVIDE(utility_block_ends_here = __utility_block_addr - ORIGIN(ZERO) + LENGTH(UTILITY));

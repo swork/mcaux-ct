@@ -15,11 +15,11 @@ clean:
 	-rm -f utility.ihex utility.bin stem.elf
 	-cargo clean
 
-utility.ihex:
+utility.ihex: Makefile
 	-[ "${AP0}" == "" ] && echo "Set at least AP0 and PW0" && exit 1
 	-[ "${PW0}" == "" ] && echo "Set at least AP0 and PW0" && exit 1
 	-[ "${URL}" == "" ] && echo "Set DFU update URL as 'URL'" && exit 1
-	cargo utility-section $(UTIL_ARGS) --string "DFU=${URL}" --string "AP0=${AP0}" --string "PW0=${PW0}" --string "AP1=${AP1}" --string "PW1=${PW1}" --string "AP2=${AP2}" --string "PW2=${PW2}" --string "AP3=${AP3}" --string "PW3=${PW3}"  --string "AP4=${AP4}" --string "PW4=${PW4}"
+	cargo utility-section $(UTIL_ARGS) --string "DFU=${URL}" --string "AP0=${AP0}" --string "PW0=${PW0}" --string "AP1=${AP1}" --string "PW1=${PW1}" --string "AP2=${AP2}" --string "PW2=${PW2}" --string "AP3=${AP3}" --string "PW3=${PW3}" 
 
 stem.elf:
 	cargo build --features stem

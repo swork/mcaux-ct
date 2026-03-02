@@ -9,6 +9,7 @@ compile_error!("one or the other of feature \"rp2040\" and \"rp235xa\" must be s
 
 use aligned::A4;
 use core::cell::RefCell;
+use cortex_m::asm;
 use cyw43::JoinOptions;
 use cyw43_pio::{DEFAULT_CLOCK_DIVIDER, PioSpi};
 use defmt::{error, info, warn};
@@ -28,7 +29,7 @@ use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use mcaux::{AssignedResources, SwitchingResources, main_rp, split_resources};
-use panic_probe as _;
+
 use reqwless::client::HttpClient;
 use reqwless::request::Method;
 use static_cell::StaticCell;
@@ -39,6 +40,15 @@ use zerocopy::IntoBytes;
 const FLASH_SIZE: usize = 4 * 1024 * 1024;
 #[cfg(feature = "rp2040")]
 const FLASH_SIZE: usize = 2 * 1024 * 1024;
+
+// Alternative to panic_probe, which has yet to make sense to me
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    error!("Panic.");
+    error!("PanicInfo, if it formats: {:?}", _info);
+    cortex_m::asm::udf();
+    loop {}
+}
 
 // from wifi_blinky, setup to twiddle the PicoW LED (and for that matter to use
 // the wifi subsystem at all)
@@ -62,32 +72,47 @@ async fn main(spawner: Spawner) -> () {
     if cfg!(feature = "stem") {
         info!("stem");
     } else {
-        info!("main");
+        info!("main.");
     }
 
+    info!("1");
     let p = embassy_rp::init(Default::default());
+    info!("2");
     let r = split_resources!(p);
+    info!("split_resources done");
 
     // Find the UTILITY section containing separately-loaded config data
     unsafe extern "C" {
-        static __utility_start: u8;
+        static utility_block_starts_here: u8;
+        static utility_block_ends_here: u8;
+    }
+
+    unsafe {
+        info!(
+            "d: utility address: {:?}",
+            (&raw const utility_block_starts_here).add(0x10000000)
+        );
     }
     static UTILITY_SECTION_PTR: StaticCell<*const u8> = StaticCell::new();
-    let temp_len = 1911usize * 1024usize; // TODO: get this from memory map, __utility_end, whatever
+    let utility_len = unsafe {
+        (&raw const utility_block_ends_here).offset_from(&raw const utility_block_starts_here)
+    };
     let utility_section: &[u8] = unsafe {
         core::slice::from_raw_parts(
-            *UTILITY_SECTION_PTR.init(&__utility_start as *const u8),
-            temp_len,
+            *UTILITY_SECTION_PTR.init((&raw const utility_block_starts_here).add(0x10000000)),
+            utility_len as usize,
         )
     };
+
     // param is max item count, strings plus blobs
-    let config: conf::Conf<15> = conf::Conf::new(utility_section);
+    let config: conf::Conf<20> = conf::Conf::new(utility_section);
     let dfu: &str = str::from_utf8(
         config
             .get_value_by_key("DFU".as_bytes())
             .expect("DFU existence"),
     )
     .expect("utf8");
+    info!("dfu: {:?}", &dfu);
     let mut ap = [""; 5];
     let mut pw = ["".as_bytes(); 5];
     for i in 0usize..5 {
@@ -99,6 +124,7 @@ async fn main(spawner: Spawner) -> () {
         } else {
             break;
         }
+        info!("ap, pw: {:?} {:?}", &ap[i], &pw[i]);
     }
 
     let fw = config.get_blob_by_id::<A4>(1).expect("fw existence");

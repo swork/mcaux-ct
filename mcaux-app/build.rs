@@ -13,7 +13,8 @@ fn main() {
 
     let mut f = File::create(out.join("memory.x")).unwrap();
     f.write_all(memory_x).unwrap();
-    println!("cargo:rerun-if-changed=memory.x");
+    println!("cargo:rerun-if-changed=memory-rp235xa.x");
+    println!("cargo:rerun-if-changed=memory-rp2040.x");
     println!("cargo:rerun-if-changed=build.rs");
 
     println!("cargo:rustc-link-arg-bins=--nmagic");
