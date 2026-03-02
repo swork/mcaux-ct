@@ -10,7 +10,7 @@ publish = false
 defmt = { version = "1.0.1", optional = true }
 defmt-rtt = { version = "1.0.0", optional = true }
 
-embassy-rp = { version = "0.9.0", path = "../embassy/embassy-rp" }
+embassy-rp = { version = "0.9.0", path = "../embassy/embassy-rp", features = ["imagedef-secure-exe",]}
 embassy-boot-rp = { version = "0.9.0", path = "../embassy/embassy-boot-rp" }
 embassy-sync = { version = "0.7.2", path = "../embassy/embassy-sync" }
 embassy-time = { version = "0.5.0", features = [], path = "../embassy/embassy-time" }
@@ -38,3 +38,8 @@ opt-level = 's'
 
 [build-dependencies]
 regex = "1.12.3"
+
+[package.metadata.embassy]
+build = [
+  { target = "thumbv8m.main-none-eabihf" }
+]
