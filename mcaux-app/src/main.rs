@@ -248,7 +248,7 @@ async fn main(spawner: Spawner) -> () {
             match response.status.0 {
                 200 => {
                     info!("Response status {}", response.status.0);
-                },
+                }
                 _ => panic!("Unexpected DFU response status {}", response.status.0),
             };
         } else {

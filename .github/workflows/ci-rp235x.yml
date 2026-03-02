@@ -77,7 +77,8 @@ jobs:
       - run: cp target/thumbv8m.main-none-eabihf/release/mcaux-app _site/dfu/pico2w/latest/mcaux-app.elf
       - run: arm-none-eabi-objcopy -O binary -S _site/dfu/pico2w/latest/mcaux-app.elf _site/dfu/pico2w/latest/mcaux-app.bin
       - run: ls -l _site/dfu/pico2w/latest/mcaux-app.bin | awk '{print $5}' > _site/dfu/pico2w/latest/size
-      - run: cargo metadata --format-version 1 --no-deps|jq '.packages[0].version' > _site/dfu/pico2W/latest/version
+      - run: cargo metadata --format-version 1 --no-deps |jq -r '.packages[0].version'
+      - run: cargo metadata --format-version 1 --no-deps |jq -r '.packages[0].version' > _site/dfu/pico2W/latest/version
 
       - name: Quick check what's getting installed
         run: ls -lR _site
