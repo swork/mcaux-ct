@@ -55,7 +55,7 @@ jobs:
           override: true
           target: thumbv6m-none-eabi
           components: clippy
-      - run: cargo clippy --features rp2040 --no-default-features  -- -D warnings
+      - run: cargo clippy --features rp2040 --no-default-features --target thumbv6m-none-eabi -- -D warnings
 
   build:
     runs-on: ubuntu-latest
@@ -69,5 +69,5 @@ jobs:
           toolchain: stable
           target: thumbv6m-none-eabi
           override: true
-      - run: cargo build --features rp2040 --no-default-features --release
+      - run: cargo build --features rp2040 --no-default-features --target thumbv6m-none-eabi --release
 
