@@ -2,18 +2,16 @@ use crate::decode;
 use aligned::{Aligned, Alignment};
 use heapless;
 
-const MAXITEMS: usize = 9;
-
 /// Configuration retrieval got a little wet, factored out here.
 pub struct Conf<'a, const N: usize> {
     section: &'a [u8],
-    items: heapless::Vec<decode::UtilityItem, MAXITEMS>,
+    items: heapless::Vec<decode::UtilityItem, N>,
 }
 
 impl<'a, const N: usize> Conf<'a, N> {
     pub fn new(section: &'a [u8]) -> Self {
-        let mut items: heapless::Vec<decode::UtilityItem, MAXITEMS> = heapless::Vec::new();
-        if decode::collect_utility_items::<MAXITEMS>(section, &mut items).is_err() {
+        let mut items: heapless::Vec<decode::UtilityItem, N> = heapless::Vec::new();
+        if decode::collect_utility_items::<N>(section, &mut items).is_err() {
             panic!("error scanning utility section");
         }
         Self { items, section }
@@ -21,11 +19,17 @@ impl<'a, const N: usize> Conf<'a, N> {
 
     pub fn get_value_by_key(&self, key: &[u8]) -> Option<&'a [u8]> {
         for item in self.items.iter() {
-            if let decode::UtilityItem::String { offset, length } = item {
-                let end = *offset + &key.len();
-                let v = &self.section[*offset..end];
-                if v == key {
-                    return Some(&self.section[*offset + end + 1..*offset + end + 1 + length]);
+            if let decode::UtilityItem::String {
+                offset: section_offset,
+                length: item_length,
+            } = item
+            {
+                let key_end = *section_offset + key.len();
+                let compare = &self.section[*section_offset..key_end];
+                if compare == key {
+                    let s = key_end + 1;
+                    let e = s + (*item_length - (key.len() + 1));
+                    return Some(&self.section[s..e]);
                 }
             }
         }

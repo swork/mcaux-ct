@@ -1,6 +1,8 @@
 use crate::hinteger::hinteger;
+use defmt::info;
 use heapless;
 
+#[derive(Debug)]
 pub enum UtilityItem {
     String {
         offset: usize,
@@ -19,36 +21,57 @@ pub enum UtilityItem {
 pub fn collect_utility_items<const N: usize>(
     section: &[u8],
     items: &mut heapless::Vec<UtilityItem, N>,
-) -> Result<(), UtilityItem> {
+) -> Result<usize, UtilityItem> {
     let mut offset: usize = 0; // pointing at first string
 
     loop {
-        let (bytes, length) = hinteger(&section[offset..]).expect("hinteger");
-        if length == 0 {
+        info!("d1");
+        let (result, hinteger_length) = hinteger(&section[offset..]).expect("hinteger");
+        info!(
+            "d2 result: {:?} hinteger_length: {:?}",
+            result, hinteger_length
+        );
+        if result == 0 {
             break;
         }
-        offset += bytes; // now at start of string
-        items.push(UtilityItem::String { offset, length })?;
-        offset += length; // now at beginning of next string, maybe end marker
+        offset += hinteger_length; // now at start of string
+        info!("d2+ {:?}", &section[offset..offset + result]);
+        items.push(UtilityItem::String {
+            offset,
+            length: result,
+        })?;
+        info!("d3-");
+        offset += result; // now at beginning of next string, maybe end marker
+        info!("d3 offset: {:?}", offset);
     }
     offset += 1; // skip the zero-length string marking end of strings
+    info!("d4 offset: {:?}", offset);
     loop {
-        let (bytes, length) = hinteger(&section[offset..]).expect("hinteger");
-        if length == 0 {
+        let (result_length, hinteger_length) = hinteger(&section[offset..]).expect("hinteger");
+        info!(
+            "d5 result_length: {:?}, hinteger_length: {:?}",
+            result_length, hinteger_length
+        );
+        if result_length == 0 {
             break;
         }
-        offset += bytes; // now at id
-        let (bytes, id) = hinteger(&section[offset..]).expect("hinteger");
-        offset += bytes; // now at alignment
-        let (bytes, align) = hinteger(&section[offset..]).expect("hinteger");
-        offset += bytes; // now at padding for alignment, if any
-        let align_helper = offset % (1 << align);
+        offset += hinteger_length; // now at id
+        let (result_id, hinteger_length) = hinteger(&section[offset..]).expect("hinteger");
+        offset += hinteger_length; // now at alignment
+        let (result_align, hinteger_length) = hinteger(&section[offset..]).expect("hinteger");
+        offset += hinteger_length; // now at padding for alignment, if any
+        let align_helper = offset % (1 << result_align);
         if align_helper > 0 {
-            offset += (1 << align) - align_helper; // now past padding, at blob start
+            offset += (1 << result_align) - align_helper; // now past padding, at blob start
         }
-        items.push(UtilityItem::Blob { offset, length, id })?;
+        items.push(UtilityItem::Blob {
+            offset,
+            length: result_length,
+            id: result_id,
+        })?;
+        offset += result_length;
     }
     offset += 1; // skip the zero-length blob marking end of blobs
     items.push(UtilityItem::End { offset })?;
-    Ok(())
+    Ok(offset)
 }
