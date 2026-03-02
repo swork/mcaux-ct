@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mcaux-rp235x
+        working-directory: mcaux-app
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mcaux-rp235x
+        working-directory: mcaux-app
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mcaux-rp235x
+        working-directory: mcaux-app
     steps:
       - uses: actions/checkout@master
       - uses: actions-rust-lang/setup-rust-toolchain@v1.0.1
