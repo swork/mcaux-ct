@@ -46,7 +46,7 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     error!("Panic.");
     error!("PanicInfo, if it formats: {:?}", _info);
     cortex_m::asm::udf();
-    #[allow(unreachable_code)]  // else they complain about "-> !" above
+    #[allow(unreachable_code)] // else they complain about "-> !" above
     loop {}
 }
 
