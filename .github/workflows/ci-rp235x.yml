@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mcaux-rp235x
+        working-directory: mcaux-app
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -21,7 +21,7 @@ jobs:
           toolchain: stable
           override: true
           target: thumbv8m.main-none-eabihf
-      - run: cargo check --all-features --target thumbv8m.main-none-eabihf
+      - run: cargo check --features rp235xa --target thumbv8m.main-none-eabihf
 
   fmt:
     name: Rustfmt
@@ -55,7 +55,7 @@ jobs:
           override: true
           target: thumbv8m.main-none-eabihf
           components: clippy
-      - run: cargo clippy -- -D warnings
+      - run: cargo clippy --features rp235xa -- -D warnings
 
   build:
     runs-on: ubuntu-latest
@@ -69,5 +69,5 @@ jobs:
           toolchain: stable
           target: thumbv8m.main-none-eabihf
           override: true
-      - run: cargo build --verbose --release
+      - run: cargo build --features rp235xa --release
 
