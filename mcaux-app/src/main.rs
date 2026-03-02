@@ -245,7 +245,12 @@ async fn main(spawner: Spawner) -> () {
 
     if let Ok(mut request) = http_client.request(Method::GET, dfu).await {
         if let Ok(response) = request.send(&mut rx_buffer).await {
-            info!("Response status: {}", response.status.0);
+            match response.status.0 {
+                200 => {
+                    info!("Response status {}", response.status.0);
+                },
+                _ => panic!("Unexpected DFU response status {}", response.status.0),
+            };
         } else {
             error!("Failed to send HTTP request");
         }
