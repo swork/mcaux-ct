@@ -2,11 +2,11 @@ MEMORY
 {
   ZERO             : ORIGIN = 0x10000000, LENGTH = 0
   BOOT2            : ORIGIN = 0x10000000, LENGTH = 0x100
-  LOADER           : ORIGIN = 0x10000100, LENGTH = 64K - 0x100
-  BOOTLOADER_STATE : ORIGIN = 0x10010000, LENGTH = 4K
-  FLASH            : ORIGIN = 0x10011000, LENGTH = 512K
-  DFU              : ORIGIN = 0x10091000, LENGTH = 516K
-  UTILITY          : ORIGIN = 0x10112000, LENGTH = 256K
+  LOADER           : ORIGIN = 0x10000100, LENGTH = 128K - 0x100
+  BOOTLOADER_STATE : ORIGIN = 0x10020000, LENGTH = 4K
+  UTILITY          : ORIGIN = 0x10021000, LENGTH = 448K
+  FLASH            : ORIGIN = 0x10091000, LENGTH = 732K
+  DFU              : ORIGIN = 0x10148000, LENGTH = 736K
   RAM      : ORIGIN = 0x20000000, LENGTH = 264K
 }
 
@@ -31,7 +31,7 @@ SECTIONS {
 SECTIONS {
   .utility_block : ALIGN(4)
   {
-    __utility_block = .;
+    __utility_block_addr = .;
     KEEP(*(.utility_block));
   } > UTILITY
 }
@@ -48,4 +48,5 @@ __bootloader_active_end = ORIGIN(FLASH) + LENGTH(FLASH) - ORIGIN(ZERO);
 __bootloader_dfu_start = ORIGIN(DFU) - ORIGIN(ZERO);
 __bootloader_dfu_end = ORIGIN(DFU) + LENGTH(DFU) - ORIGIN(ZERO);
 
-__utility_start = ORIGIN(UTILITY);
+PROVIDE(utility_block_starts_here = __utility_block_addr - ORIGIN(ZERO));
+PROVIDE(utility_block_ends_here = __utility_block_addr - ORIGIN(ZERO) + LENGTH(UTILITY));
