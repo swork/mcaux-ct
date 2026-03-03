@@ -67,13 +67,16 @@ fn strs_n() {
     let c: conf::Conf<25> = conf::Conf::new(SECTION);
     assert_eq!(c.get_value_by_key_n(b"S", 0).unwrap(), b"A");
     assert_eq!(c.get_value_by_key_n(b"S", 1).unwrap(), b"BB");
-    assert_eq!(c.get_value_by_key_n(b"URL", 0).unwrap(), b"http://web.local/");
+    assert_eq!(
+        c.get_value_by_key_n(b"URL", 0).unwrap(),
+        b"http://web.local/"
+    );
 }
 
 #[test]
 fn mapping() {
     let c: conf::Conf<25> = conf::Conf::new(SECTION);
-    let dfu_prefix: [&str; 1] = [0u8,].map(|i| {
+    let dfu_prefix: [&str; 1] = [0u8].map(|i| {
         if let Some(url) = c.get_value_by_key_n(b"URL", i) {
             println!("dfu {} {:?}", i, &url);
             str::from_utf8(url).expect("utf8")
