@@ -77,10 +77,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y binutils-arm-none-eabi
           cd mcaux-app
+          cargo build
           cargo build --release
-          cargo build --debug
+          cargo build           --no-default-features --features rp2040 --target thumbv6m-none-eabi
           cargo build --release --no-default-features --features rp2040 --target thumbv6m-none-eabi
-          cargo build --debug   --no-default-features --features rp2040 --target thumbv6m-none-eabi
           RELDIR=../_site/DFU/mcaux-app/picow/latest
           RELDIR2=../_site/DFU/mcaux-app/pico2w/latest
           export RELDIR RELDIR2
