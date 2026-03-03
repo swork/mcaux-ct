@@ -87,9 +87,9 @@ jobs:
           mkdir -p $RELDIR
           mkdir -p $RELDIR2
           cp target/thumbv6m-none-eabi/release/mcaux-app $RELDIR/release.elf
-          cp target/thumbv6m-none-eabi/debug/mcaux-app $RELDIR/debug.elf
+          # cp target/thumbv6m-none-eabi/debug/mcaux-app $RELDIR/debug.elf
           (cd $RELDIR && arm-none-eabi-objcopy -O binary -S release.elf release.bin)
-          (cd $RELDIR && arm-none-eabi-objcopy -O binary -S debug.elf debug.bin)
+          # (cd $RELDIR && arm-none-eabi-objcopy -O binary -S debug.elf debug.bin)
           cargo metadata --format-version 1 --no-deps|jq -r '.packages[0].version' > $RELDIR/version
           ls -l $RELDIR/release.bin | awk '{print $5}' > $RELDIR/size
           cp target/thumbv8m.main-none-eabihf/release/mcaux-app $RELDIR2/release.elf
