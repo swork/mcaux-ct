@@ -31,7 +31,6 @@ jobs:
           rustup default stable
           rustup set profile minimal
           rustup target add wasm32-unknown-unknown
-          rustup target add thumbv8m.main-none-eabihf
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
@@ -73,6 +72,9 @@ jobs:
 
       - name: Build release .bin for rp235x
         run: |
+          rustup target add thumbv8m.main-none-eabihf
+          sudo apt-get update
+          sudo apt-get install -y binutils-arm-none-eabi
           cd mcaux-app
           cargo build --release
           RELDIR=../_site/DFU/mcaux-app/pico2w/latest
