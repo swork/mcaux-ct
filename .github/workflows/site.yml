@@ -79,7 +79,7 @@ jobs:
           cd mcaux-app
           cargo build
           cargo build --release
-          cargo build           --no-default-features --features rp2040 --target thumbv6m-none-eabi
+          # cargo build           --no-default-features --features rp2040 --target thumbv6m-none-eabi (overflows with TLS enabled)
           cargo build --release --no-default-features --features rp2040 --target thumbv6m-none-eabi
           RELDIR=../_site/DFU/mcaux-app/picow/latest
           RELDIR2=../_site/DFU/mcaux-app/pico2w/latest
