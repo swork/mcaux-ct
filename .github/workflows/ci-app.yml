@@ -1,0 +1,81 @@
+
+name: CI rp235x
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcaux-app
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          rustup update stable
+          rustup default stable
+          rustup set profile minimal
+          rustup target add thumbv8m.main-none-eabihf
+          rustup target add thumbv6m-none-eabi
+      - run: cargo check --features rp235xa --target thumbv8m.main-none-eabihf
+      - run: cargo check --features rp2040 --target thumbv6m-none-eabi
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcaux-app
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          rustup update stable
+          rustup default stable
+          rustup set profile minimal
+          rustup target add thumbv8m.main-none-eabihf
+          rustup component add rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcaux-app
+    steps:
+      - uses: actions/checkout@v5
+      - run: |
+          rustup update stable
+          rustup default stable
+          rustup set profile minimal
+          rustup target add thumbv8m.main-none-eabihf
+          rustup target add thumbv6m-none-eabi
+          rustup component add clippy
+      - run: cargo clippy --features rp235xa -- -D warnings
+      - run: cargo clippy --features rp2040 -- -D warnings
+
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcaux-app
+    steps:
+      - uses: actions/checkout@master
+      - run: |
+          rustup update stable
+          rustup default stable
+          rustup set profile minimal
+          rustup target add thumbv8m.main-none-eabihf
+          rustup target add thumbv6m-none-eabi
+      - run: cargo build --features rp235xa --release --target thumbv8m.main-none-eabihf
+      - run: cargo build --features rp2040 --release --target thumbv6m-none-eabi
