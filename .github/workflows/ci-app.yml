@@ -1,5 +1,5 @@
 
-name: CI rp235x
+name: CI tests for mcaux-app
 
 on: [push, pull_request, workflow_dispatch]
 
@@ -28,7 +28,7 @@ jobs:
           rustup target add thumbv8m.main-none-eabihf
           rustup target add thumbv6m-none-eabi
       - run: cargo check --features rp235xa --target thumbv8m.main-none-eabihf
-      - run: cargo check --features rp2040 --target thumbv6m-none-eabi
+      - run: cargo check --features rp2040 --no-default-features --target thumbv6m-none-eabi
 
   fmt:
     name: Rustfmt
@@ -62,7 +62,7 @@ jobs:
           rustup target add thumbv6m-none-eabi
           rustup component add clippy
       - run: cargo clippy --features rp235xa -- -D warnings
-      - run: cargo clippy --features rp2040 -- -D warnings
+      - run: cargo clippy --features rp2040 --no-default-features -- -D warnings
 
   build:
     runs-on: ubuntu-latest
@@ -78,4 +78,4 @@ jobs:
           rustup target add thumbv8m.main-none-eabihf
           rustup target add thumbv6m-none-eabi
       - run: cargo build --features rp235xa --release --target thumbv8m.main-none-eabihf
-      - run: cargo build --features rp2040 --release --target thumbv6m-none-eabi
+      - run: cargo build --features rp2040 --no-default-features --release --target thumbv6m-none-eabi
