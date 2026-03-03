@@ -30,7 +30,7 @@ use embassy_sync::channel::Channel;
 use embedded_io_async::Read;
 use heapless::String;
 use mcaux::{AssignedResources, SwitchingResources, main_rp, split_resources};
-use reqwless::client::HttpClient;
+use reqwless::client::{HttpClient, TlsConfig, TlsVerify};
 use reqwless::request::RequestBuilder;
 use static_cell::StaticCell;
 use utility_section::conf;
@@ -247,10 +247,13 @@ async fn main(spawner: Spawner) -> () {
     // END NETWORKING_SETUP
 
     let mut rx_buffer = [0u8; 4096]; // TODO changed from "0", check for consequence
+    let mut tls_read_buffer = [0; 16640];
+    let mut tls_write_buffer = [0; 16640];
     let client_state = TcpClientState::<1, 4096, 4096>::new();
     let tcp_client = TcpClient::new(stack, &client_state);
     let dns_client = DnsSocket::new(stack);
-    let mut http_client = HttpClient::new(&tcp_client, &dns_client);
+    let tls_config = TlsConfig::new(seed, &mut tls_read_buffer, &mut tls_write_buffer, TlsVerify::None);
+    let mut http_client = HttpClient::new_with_tls(&tcp_client, &dns_client, tls_config);
 
     // Do telemetry dump interactions
     // telemetry(&mut http_client).await.expect("succeeded");
