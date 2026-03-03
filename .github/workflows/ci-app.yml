@@ -62,7 +62,7 @@ jobs:
           rustup target add thumbv6m-none-eabi
           rustup component add clippy
       - run: cargo clippy --features rp235xa -- -D warnings
-      - run: cargo clippy --features rp2040 --no-default-features -- -D warnings
+      - run: cargo clippy --features rp2040 --no-default-features --target thumbv6m-none-eabi -- -D warnings
 
   build:
     runs-on: ubuntu-latest

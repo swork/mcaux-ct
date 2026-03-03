@@ -1,4 +1,4 @@
-name: Jekyll to Github Pages with WASM demo
+name: swork.github.io mcaux-ct subtree build
 
 # By default, runs if you push to main. keeps your deployed app in sync with main branch.
 on:
@@ -73,17 +73,31 @@ jobs:
       - name: Build release .bin for rp235x
         run: |
           rustup target add thumbv8m.main-none-eabihf
+          rustup target add thumbv6m-none-eabi
           sudo apt-get update
           sudo apt-get install -y binutils-arm-none-eabi
           cd mcaux-app
           cargo build --release
-          RELDIR=../_site/DFU/mcaux-app/pico2w/latest
-          export RELDIR
+          cargo build --debug
+          cargo build --release --no-default-features --features rp2040 --target thumbv6m-none-eabi
+          cargo build --debug   --no-default-features --features rp2040 --target thumbv6m-none-eabi
+          RELDIR=../_site/DFU/mcaux-app/picow/latest
+          RELDIR2=../_site/DFU/mcaux-app/pico2w/latest
+          export RELDIR RELDIR2
           mkdir -p $RELDIR
-          cp target/thumbv8m.main-none-eabihf/release/mcaux-app $RELDIR/release.elf
+          mkdir -p $RELDIR2
+          cp target/thumbv6m-none-eabi/release/mcaux-app $RELDIR/release.elf
+          cp target/thumbv6m-none-eabi/debug/mcaux-app $RELDIR/debug.elf
           (cd $RELDIR && arm-none-eabi-objcopy -O binary -S release.elf release.bin)
+          (cd $RELDIR && arm-none-eabi-objcopy -O binary -S debug.elf debug.bin)
           cargo metadata --format-version 1 --no-deps|jq -r '.packages[0].version' > $RELDIR/version
           ls -l $RELDIR/release.bin | awk '{print $5}' > $RELDIR/size
+          cp target/thumbv8m.main-none-eabihf/release/mcaux-app $RELDIR2/release.elf
+          cp target/thumbv8m.main-none-eabihf/debug/mcaux-app $RELDIR2/debug.elf
+          (cd $RELDIR2 && arm-none-eabi-objcopy -O binary -S release.elf release.bin)
+          (cd $RELDIR2 && arm-none-eabi-objcopy -O binary -S debug.elf debug.bin)
+          cargo metadata --format-version 1 --no-deps|jq -r '.packages[0].version' > $RELDIR2/version
+          ls -l $RELDIR2/release.bin | awk '{print $5}' > $RELDIR2/size
 
       - name: Prove the resulting site matches expectations
         run: ls -lR _site
