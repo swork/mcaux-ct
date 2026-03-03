@@ -31,6 +31,7 @@ jobs:
           rustup default stable
           rustup set profile minimal
           rustup target add wasm32-unknown-unknown
+          rustup target add thumbv8m.main-none-eabihf
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
