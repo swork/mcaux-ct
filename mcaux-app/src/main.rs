@@ -273,7 +273,6 @@ async fn main(spawner: Spawner) -> () {
             if let Ok(mut resource) = http_client.resource(req_buf.as_str()).await {
                 let request = resource.get("version");
                 if let Ok(response) = request.send(&mut rx_buffer).await {
-                    info!(" response {:?}", response);
                     if response.status.is_successful() {
                         info!("Response status:{} type:{:?} len:{:?} tenc:{:?}, ka:{:?}",
                               response.status.0,
