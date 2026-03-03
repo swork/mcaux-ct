@@ -1,11 +1,7 @@
-on: [push, pull_request, workflow_dispatch]
 
 name: CI rp235x
 
-on:
-  push:
-    branches:
-      - main
+on: [push, pull_request, workflow_dispatch]
 
 permissions:
   contents: read
