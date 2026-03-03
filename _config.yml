@@ -14,3 +14,7 @@ exclude:
   - "*/src"
   - "*/Cargo.*"
   - ".*"
+  - "embassy"
+  - "mcaux-*"
+  - "utility-section"
+  - "trunk"

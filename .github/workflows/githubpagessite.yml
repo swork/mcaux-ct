@@ -70,6 +70,18 @@ jobs:
       - name: Integrate demo as "mockup" so Jekyll can build docs under "demo"
         run: mkdir _site/mockup && mv demo/dist/* _site/mockup
 
+      - name: Build release .bin for rp235x
+        run: |
+          cd mcaux-app
+          cargo build --release
+          RELDIR=../_site/DFU/mcaux-app/pico2w/latest
+          export RELDIR
+          mkdir -p $RELDIR
+          cp target/thumbv8m.main-none-eabihf/release/mcaux-app $RELDIR/release.elf
+          (cd $RELDIR && arm-none-eabi-objcopy -O bin -S release.elf release.bin)
+          cargo metadata --format-version 1 --no-deps|jq -r '.packages[0].version' > $RELDIR/version
+          ls -l $RELDIR/release.bin | awk '{print $4}' > size
+
       - name: Prove the resulting site matches expectations
         run: ls -lR _site
 
