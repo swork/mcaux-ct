@@ -7,10 +7,9 @@ use embassy_executor::{Spawner, task};
 use embassy_futures::select::{Either, select};
 use embassy_rp::gpio::{Input, Level, Output, Pull};
 use embassy_rp::pwm::{Pwm, PwmOutput, SetDutyCycle};
-use embassy_rp::watchdog::Watchdog;
 use embassy_rp::{Peri, peripherals, pwm};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::Channel;
+use embassy_sync::channel::{Channel, Sender};
 use embassy_time::{Duration, Timer};
 use fixed::FixedU16;
 use fixed::types::extra::U4;
@@ -20,8 +19,6 @@ use momentary::{AbstractInput, SwitchOutputController, SwitchesState};
 /// How many receive slots for inter-task Channels
 const SWITCH_CHANNEL_DEPTH: usize = 5; // TODO: 1 should be sufficient, experiment
 const INDICATOR_CHANNEL_DEPTH: usize = 5;
-
-const WATCHDOG_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// How long to wait after a switch edge to decide it's fer realz.
 const DEBOUNCE: Duration = Duration::from_millis(40); // TODO configurable?
@@ -116,6 +113,14 @@ async fn switch_state_observer(
     }
 }
 
+/// Report to outermost task: aliveness; do telemetry/DFU and reset
+pub enum Telemetry {
+    Alive,
+    Update,
+}
+
+pub const TELEMETRY_CHANNEL_DEPTH: usize = 1;
+
 assign_resources! {
     switching: SwitchingResources {
         led_blinker: PIN_2,
@@ -140,17 +145,16 @@ assign_resources! {
         out_grp: PIN_18,
         out_nav: PIN_19,
         pwm_outgrp: PWM_SLICE1,
-        watchdog: WATCHDOG,
     }
 }
 
 #[embassy_executor::task]
-pub async fn main_rp(spawner: Spawner, p: SwitchingResources) -> () {
+pub async fn main_rp(
+    spawner: Spawner,
+    p: SwitchingResources,
+    tc: Sender<'static, CriticalSectionRawMutex, Telemetry, TELEMETRY_CHANNEL_DEPTH>,
+) -> () {
     let mut blinker = Output::new(p.led_blinker, Level::High);
-
-    // Override bootloader watchdog
-    let mut watchdog = Watchdog::new(p.watchdog);
-    watchdog.start(WATCHDOG_TIMEOUT);
 
     /*
         // serial trace output - sidestep unresolved RTT woes
@@ -289,7 +293,8 @@ pub async fn main_rp(spawner: Spawner, p: SwitchingResources) -> () {
 
     loop {
         info!("Top of loop");
-        watchdog.feed(WATCHDOG_TIMEOUT);
+        tc.send(Telemetry::Alive).await; // watchdog management
+
         switch_controller.remap();
 
         // Reflect model to output hardware

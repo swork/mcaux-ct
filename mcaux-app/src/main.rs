@@ -23,13 +23,18 @@ use embassy_rp::flash::Flash;
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, PIO0};
 use embassy_rp::pio::{InterruptHandler, Pio};
+use embassy_rp::watchdog::Watchdog;
 use embassy_rp::{bind_interrupts, dma};
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
+use embassy_time::Duration;
 use embedded_io_async::Read;
 use heapless::String;
-use mcaux::{AssignedResources, SwitchingResources, main_rp, split_resources};
+use mcaux::{
+    AssignedResources, SwitchingResources, TELEMETRY_CHANNEL_DEPTH, Telemetry, main_rp,
+    split_resources,
+};
 use reqwless::client::{HttpClient, TlsConfig, TlsVerify};
 use reqwless::request::RequestBuilder;
 use static_cell::StaticCell;
@@ -52,8 +57,7 @@ const BIN_FILE_NAME: &str = "release.bin";
 // Alternative to panic_probe, which has yet to make sense to me
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    error!("Panic.");
-    error!("PanicInfo, if it formats: {:?}", info);
+    error!("Panic, {}", info);
     cortex_m::asm::udf();
     #[allow(unreachable_code)] // else they complain about "-> !" above
     loop {}
@@ -79,9 +83,9 @@ async fn cyw43_task(
 #[embassy_executor::main]
 async fn main(spawner: Spawner) -> () {
     if cfg!(feature = "stem") {
-        info!("stem");
+        info!("stem v{}", VERSION);
     } else {
-        info!("main.");
+        info!("main v{}", VERSION);
     }
 
     info!("1");
@@ -89,6 +93,12 @@ async fn main(spawner: Spawner) -> () {
     info!("2");
     let r = split_resources!(p);
     info!("split_resources done");
+
+    const WATCHDOG_TIMEOUT: Duration = Duration::from_secs(8);
+
+    // Override bootloader watchdog
+    let mut watchdog = Watchdog::new(p.WATCHDOG);
+    watchdog.start(WATCHDOG_TIMEOUT);
 
     // Find the UTILITY section containing separately-loaded config data
     unsafe extern "C" {
@@ -114,6 +124,8 @@ async fn main(spawner: Spawner) -> () {
     };
     // param is max item count, strings plus blobs
     let config: conf::Conf<20> = conf::Conf::new(utility_section);
+    let dfu_prefix: [&str; 1] = ["https://httpbin.org/json"];
+    /*
     let dfu_prefix: [&str; 3] = [0u8, 1, 2].map(|i| {
         if let Some(url) = config.get_value_by_key_n(b"DFU", i) {
             info!("dfu {} {}", i, url);
@@ -122,6 +134,7 @@ async fn main(spawner: Spawner) -> () {
             ""
         }
     });
+    */
     info!("dfu {:?}", dfu_prefix);
     let mut ap = [""; 5];
     let mut pw = ["".as_bytes(); 5];
@@ -142,23 +155,26 @@ async fn main(spawner: Spawner) -> () {
     let nvram = config.get_blob_by_id::<A4>(3).expect("nvram existence");
 
     if !cfg!(feature = "stem") {
-        const TELEMETRY_CHANNEL_DEPTH: usize = 1;
-        type TelemetryChannel = Channel<CriticalSectionRawMutex, (), TELEMETRY_CHANNEL_DEPTH>;
+        type TelemetryChannel =
+            Channel<CriticalSectionRawMutex, Telemetry, TELEMETRY_CHANNEL_DEPTH>;
         static TELEMETRY_CHANNEL: StaticCell<TelemetryChannel> = StaticCell::new();
-
         let telemetry_channel = TELEMETRY_CHANNEL.init(TelemetryChannel::new());
+        let telemetry_sender = telemetry_channel.sender();
         let telemetry_receiver = telemetry_channel.receiver();
 
         // Establish the core application: switching aux equipment
-        spawner.spawn(main_rp(spawner, r.switching).expect("Main switcher task"));
+        spawner.spawn(main_rp(spawner, r.switching, telemetry_sender).expect("Main switcher task"));
 
         //////////////////////////////////////////////////////////////////////////////
         // The motorcycle switch manager expects to do networking very rarely,      //
         // triggered by a Vulcan-pinch of some kind when firmware update is needed  //
         // or telemetry is of interest (temperature of the bike's voltage regulator //
-        // for example). In most runs this funtion will wait here until power-off.  //
+        // for example). In most runs we'll stay here until power-off, tickling the //
+        // watchdog on behalf of the application's main loop.                       //
         //////////////////////////////////////////////////////////////////////////////
-        telemetry_receiver.receive().await;
+        while let Telemetry::Alive = telemetry_receiver.receive().await {
+            watchdog.feed(WATCHDOG_TIMEOUT);
+        }
     }
 
     let pwr = Output::new(p.PIN_23, Level::Low);
@@ -225,6 +241,7 @@ async fn main(spawner: Spawner) -> () {
     'outer: loop {
         for i in 0usize..5 {
             if !ap[i].is_empty() {
+                watchdog.feed(WATCHDOG_TIMEOUT);
                 if let Err(err) = control.join(ap[i], JoinOptions::new(pw[i])).await {
                     info!("join ssid {:?} failed: {:?}", ap[i], err);
                     continue;
@@ -239,11 +256,14 @@ async fn main(spawner: Spawner) -> () {
 
     // RGB blue
     info!("waiting for link...");
+    watchdog.start(WATCHDOG_TIMEOUT);
     stack.wait_link_up().await;
     info!("waiting for DHCP...");
+    watchdog.start(WATCHDOG_TIMEOUT);
     stack.wait_config_up().await;
     // RGB green
     info!("Stack is up!");
+    watchdog.start(WATCHDOG_TIMEOUT);
     // END NETWORKING_SETUP
 
     let mut rx_buffer = [0u8; 4096]; // TODO changed from "0", check for consequence
@@ -252,14 +272,24 @@ async fn main(spawner: Spawner) -> () {
     let client_state = TcpClientState::<1, 4096, 4096>::new();
     let tcp_client = TcpClient::new(stack, &client_state);
     let dns_client = DnsSocket::new(stack);
-    let tls_config = TlsConfig::new(seed, &mut tls_read_buffer, &mut tls_write_buffer, TlsVerify::None);
+    let tls_config = TlsConfig::new(
+        seed,
+        &mut tls_read_buffer,
+        &mut tls_write_buffer,
+        TlsVerify::None,
+    );
     let mut http_client = HttpClient::new_with_tls(&tcp_client, &dns_client, tls_config);
 
     // Do telemetry dump interactions
     // telemetry(&mut http_client).await.expect("succeeded");
 
     // Firmware update, after check.
-    let version: usize = VERSION.split('.').next().expect("str").parse::<usize>().expect("number");
+    let version: usize = VERSION
+        .split('.')
+        .next()
+        .expect("str")
+        .parse::<usize>()
+        .expect("number");
     info!("VERSION:{}", version);
     let mut req_buf: String<80, u8> = String::new();
     let mut i = 0;
@@ -272,21 +302,36 @@ async fn main(spawner: Spawner) -> () {
             info!(" full path {}", req_buf);
             if let Ok(mut resource) = http_client.resource(req_buf.as_str()).await {
                 let request = resource.get("version");
+                watchdog.start(WATCHDOG_TIMEOUT);
                 if let Ok(response) = request.send(&mut rx_buffer).await {
                     if response.status.is_successful() {
-                        info!("Response status:{} type:{:?} len:{:?} tenc:{:?}, ka:{:?}",
-                              response.status.0,
-                              response.content_type,
-                              response.content_length,
-                              response.transfer_encoding,
-                              response.keep_alive,
+                        info!(
+                            "Response status:{} type:{:?} len:{:?} tenc:{:?}, ka:{:?}",
+                            response.status.0,
+                            response.content_type,
+                            response.content_length,
+                            response.transfer_encoding,
+                            response.keep_alive,
                         );
-                        let ver_as_str = str::from_utf8(response.body().read_to_end().await
-                                                        .expect("version in body")
-                        ).expect("utf8");
-                        let ver_as_num = ver_as_str.split('.').next().expect("str").parse::<usize>().expect("number");
+                        let ver_as_str = str::from_utf8(
+                            response
+                                .body()
+                                .read_to_end()
+                                .await
+                                .expect("version in body"),
+                        )
+                        .expect("utf8");
+                        let ver_as_num = ver_as_str
+                            .split('.')
+                            .next()
+                            .expect("str")
+                            .parse::<usize>()
+                            .expect("number");
                         if ver_as_num > version {
-                            info!("DFU {} newer than {}, proceed with update", ver_as_str, version);
+                            info!(
+                                "DFU {} newer than {}, proceed with update",
+                                ver_as_str, version
+                            );
                             break Some(resource);
                         } else {
                             info!("DFU {} not newer than {}, sit pat", ver_as_str, version);
@@ -310,17 +355,24 @@ async fn main(spawner: Spawner) -> () {
         }
     } {
         // Get size
-        let size_rsp = resource.get("size")
-            .send(&mut rx_buffer).await
+        watchdog.start(WATCHDOG_TIMEOUT);
+        let size_rsp = resource
+            .get("size")
+            .send(&mut rx_buffer)
+            .await
             .expect("size rsp");
         let size = str::from_utf8(
             if size_rsp.status.is_successful() {
+                watchdog.start(WATCHDOG_TIMEOUT);
                 size_rsp.body().read_to_end().await
             } else {
                 panic!("unexpected size rsp status {}", size_rsp.status.0);
             }
-            .expect("size in body")
-        ).expect("utf8").parse::<usize>().expect("usize");
+            .expect("size in body"),
+        )
+        .expect("utf8")
+        .parse::<usize>()
+        .expect("usize");
 
         // get binary, one page at a time. Be sure the resource doesn't change part way.
         let mut etag: String<64, u8> = String::new();
@@ -340,21 +392,19 @@ async fn main(spawner: Spawner) -> () {
             let range_tuple = ("Range", range_value.as_str());
             let mut etag_value: String<64, u8> = String::new();
             let _ = etag_value.push_str(&etag);
-            let etag_tuple = if etag.len() > 0 {
-                ("If-Range", etag_value.as_str())
-            } else {
+            let etag_tuple = if etag.is_empty() {
                 ("X-Placeholder", "no-value")
-            };
-            let h = [ range_tuple, etag_tuple ];
-            let chunk_rsp = if etag.len() > 0 {
-                resource.get(BIN_FILE_NAME)
-                    .headers(&h)
-                    .send(&mut rx_buffer).await.expect("send chunk req")
             } else {
-                resource.get(BIN_FILE_NAME)
-                    .headers(&h)
-                    .send(&mut rx_buffer).await.expect("send chunk req")
+                ("If-Range", etag_value.as_str())
             };
+            let h = [range_tuple, etag_tuple];
+            watchdog.start(WATCHDOG_TIMEOUT);
+            let chunk_rsp = resource
+                .get(BIN_FILE_NAME)
+                .headers(&h)
+                .send(&mut rx_buffer)
+                .await
+                .expect("send chunk req");
             if chunk_rsp.status.is_successful() {
                 // Ensure response is 206 not 200. Conditional req failed if 200.
                 if chunk_rsp.status.0 == 200 {
@@ -367,35 +417,49 @@ async fn main(spawner: Spawner) -> () {
                         ("Content-Range", value) => {
                             let val_str = str::from_utf8(value).expect("utf8");
                             let slash = val_str.find('/').expect("size trails");
-                            let size_here: usize = val_str[slash+1..].parse::<usize>().expect("num");
+                            let size_here: usize =
+                                val_str[slash + 1..].parse::<usize>().expect("num");
                             if size_here != size {
                                 error!("size in {} isn't {}", value, size);
                                 panic!("DFU changed");
                             }
-                        },
-                        ("ETag", value) => if etag.len() == 0 {
-                            let _ = etag.push_str(str::from_utf8(value).expect("utf8"));
-                        },
+                        }
+                        ("ETag", value) => {
+                            if etag.is_empty() {
+                                let _ = etag.push_str(str::from_utf8(value).expect("utf8"));
+                            }
+                        }
                         (_, _) => (),
                     };
                 }
 
                 let mut chunk_buffer: [_; 4096] = [0u8; 4096];
-                chunk_rsp.body().reader().read_exact(&mut chunk_buffer).await
+                watchdog.start(WATCHDOG_TIMEOUT);
+                chunk_rsp
+                    .body()
+                    .reader()
+                    .read_exact(&mut chunk_buffer)
+                    .await
                     .expect("read_exact");
-                updater.write_firmware(start_byte, &chunk_buffer).expect("write_firmware");
+                watchdog.start(WATCHDOG_TIMEOUT);
+                updater
+                    .write_firmware(start_byte, &chunk_buffer)
+                    .expect("write_firmware");
             } else {
-                error!("DFU fail status:{} at {}", chunk_rsp.status.0, range_tuple.1);
+                error!(
+                    "DFU fail status:{} at {}",
+                    chunk_rsp.status.0, range_tuple.1
+                );
                 panic!("DFU fail");
             }
         }
+        watchdog.start(WATCHDOG_TIMEOUT);
         updater.mark_updated().expect("mark_updated");
     } else {
         error!("Found no usable DFUx url");
     }
 
     panic!("Deliberate panic to stop the show");
-
 }
 
 #[allow(dead_code)]
