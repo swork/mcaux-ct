@@ -1,8 +1,9 @@
 # MCAux-CT
 
- - [![CI rp235x](https://github.com/swork/mcaux-ct/actions/workflows/ci-rp235x.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/ci-rp235x.yml)[![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=mcaux-rp235x)](https://deps.rs/repo/github/swork/mcaux-ct?path=mcaux-rp235x)
- - [![CI rp2040](https://github.com/swork/mcaux-ct/actions/workflows/ci-rp2040.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/ci-rp2040.yml)[![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=mcaux-rp2040)](https://deps.rs/repo/github/swork/mcaux-ct?path=mcaux-rp2040)
- - [![CI demo](https://github.com/swork/mcaux-ct/actions/workflows/ci-demo.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/ci-demo.yml)[![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=demo)](https://deps.rs/repo/github/swork/mcaux-ct?path=demo)
+ - [![mcaux-app](https://github.com/swork/mcaux-ct/actions/workflows/ci-app.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/ci-app.yml)[![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=mcaux-app)](https://deps.rs/repo/github/swork/mcaux-ct?path=mcaux-app)
+ - [![WASM demo](https://github.com/swork/mcaux-ct/actions/workflows/ci-demo.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/ci-demo.yml)[![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=demo)](https://deps.rs/repo/github/swork/mcaux-ct?path=demo)
+ - [![site](https://github.com/swork/mcaux-ct/actions/workflows/site.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/site.yml)
+
 
 This is the repo for mcaux-ct, a motorcycle auxiliary equipment controller, a quixotic art project for my KLR650.
 
