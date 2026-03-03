@@ -16,10 +16,10 @@ clean:
 	-cargo clean
 
 utility.ihex: Makefile
-	-[ "${AP0}" == "" ] && echo "Set at least AP0 and PW0" && exit 1
-	-[ "${PW0}" == "" ] && echo "Set at least AP0 and PW0" && exit 1
-	-[ "${DFU}" == "" ] && echo "Set DFU update URL as 'DFU'" && exit 1
-	cargo utility-section $(UTIL_ARGS) --string "DFU=${DFU}" --string "AP0=${AP0}" --string "PW0=${PW0}" --string "AP1=${AP1}" --string "PW1=${PW1}" --string "AP2=${AP2}" --string "PW2=${PW2}" --string "AP3=${AP3}" --string "PW3=${PW3}" 
+	if [ "${AP0}" != "" ]; then exit 0; else echo "Set at least AP0 and PW0" && exit 1 ; fi
+	if [ "${PW0}" != "" ]; then exit 0; else echo "Set at least AP0 and PW0" && exit 1 ; fi
+	if [ "${DFU0}" != "" ];then exit 0; else  echo "Set at least DFU0 update url prefix" && exit 1 ; fi
+	cargo utility-section $(UTIL_ARGS) --string "DFU0=${DFU0}" --string "DFU1=${DFU1}" --string "DFU2=${DFU2}" --string "AP0=${AP0}" --string "PW0=${PW0}" --string "AP1=${AP1}" --string "PW1=${PW1}" --string "AP2=${AP2}" --string "PW2=${PW2}" --string "AP3=${AP3}" --string "PW3=${PW3}" --string "AP4=${AP4}" --string "PW4=${PW4}"
 
 stem.elf:
 	cargo build --features stem

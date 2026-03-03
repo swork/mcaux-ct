@@ -1,5 +1,4 @@
 use crate::hinteger::hinteger;
-use defmt::info;
 use heapless;
 
 #[derive(Debug)]
@@ -25,33 +24,20 @@ pub fn collect_utility_items<const N: usize>(
     let mut offset: usize = 0; // pointing at first string
 
     loop {
-        info!("d1");
         let (result, hinteger_length) = hinteger(&section[offset..]).expect("hinteger");
-        info!(
-            "d2 result: {:?} hinteger_length: {:?}",
-            result, hinteger_length
-        );
         if result == 0 {
             break;
         }
         offset += hinteger_length; // now at start of string
-        info!("d2+ {:?}", &section[offset..offset + result]);
         items.push(UtilityItem::String {
             offset,
             length: result,
         })?;
-        info!("d3-");
         offset += result; // now at beginning of next string, maybe end marker
-        info!("d3 offset: {:?}", offset);
     }
     offset += 1; // skip the zero-length string marking end of strings
-    info!("d4 offset: {:?}", offset);
     loop {
         let (result_length, hinteger_length) = hinteger(&section[offset..]).expect("hinteger");
-        info!(
-            "d5 result_length: {:?}, hinteger_length: {:?}",
-            result_length, hinteger_length
-        );
         if result_length == 0 {
             break;
         }

@@ -36,6 +36,14 @@ impl<'a, const N: usize> Conf<'a, N> {
         None
     }
 
+    pub fn get_value_by_key_n(&self, key: &[u8], n: u8) -> Option<&'a [u8]> {
+        let mut k: heapless::String<16,u8> = heapless::String::new();
+        let _ = k.push_str(str::from_utf8(key).expect("utf8"));
+        let mut b = itoa::Buffer::new();
+        let _ = k.push_str(b.format(n));
+        self.get_value_by_key(k.as_bytes())
+    }
+
     pub fn get_blob_by_id<A>(&self, find_id: usize) -> Option<&'a Aligned<A, [u8]>>
     where
         A: Alignment,

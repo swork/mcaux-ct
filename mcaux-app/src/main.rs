@@ -27,24 +27,33 @@ use embassy_rp::{bind_interrupts, dma};
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
+use embedded_io_async::Read;
+use heapless::String;
 use mcaux::{AssignedResources, SwitchingResources, main_rp, split_resources};
-
 use reqwless::client::HttpClient;
-use reqwless::request::Method;
+use reqwless::request::RequestBuilder;
 use static_cell::StaticCell;
 use utility_section::conf;
 use zerocopy::IntoBytes;
+
+#[cfg(feature = "rp235xa")]
+const DFU_PATH: &str = "mcaux-app/pico2w/latest/";
+#[cfg(feature = "rp2040")]
+const DFU_PATH: &str = "mcaux-app/picow/latest/";
 
 #[cfg(feature = "rp235xa")]
 const FLASH_SIZE: usize = 4 * 1024 * 1024;
 #[cfg(feature = "rp2040")]
 const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const BIN_FILE_NAME: &str = "release.bin";
+
 // Alternative to panic_probe, which has yet to make sense to me
 #[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
+fn panic(info: &core::panic::PanicInfo) -> ! {
     error!("Panic.");
-    error!("PanicInfo, if it formats: {:?}", _info);
+    error!("PanicInfo, if it formats: {:?}", info);
     cortex_m::asm::udf();
     #[allow(unreachable_code)] // else they complain about "-> !" above
     loop {}
@@ -89,7 +98,7 @@ async fn main(spawner: Spawner) -> () {
 
     unsafe {
         info!(
-            "d: utility address: {:?}",
+            "utility address: {:?}",
             (&raw const utility_block_starts_here).add(0x10000000)
         );
     }
@@ -103,16 +112,17 @@ async fn main(spawner: Spawner) -> () {
             utility_len as usize,
         )
     };
-
     // param is max item count, strings plus blobs
     let config: conf::Conf<20> = conf::Conf::new(utility_section);
-    let dfu: &str = str::from_utf8(
-        config
-            .get_value_by_key("DFU".as_bytes())
-            .expect("DFU existence"),
-    )
-    .expect("utf8");
-    info!("dfu: {:?}", &dfu);
+    let dfu_prefix: [&str; 3] = [0u8, 1, 2].map(|i| {
+        if let Some(url) = config.get_value_by_key_n(b"DFU", i) {
+            info!("dfu {} {}", i, url);
+            str::from_utf8(url).expect("utf8")
+        } else {
+            ""
+        }
+    });
+    info!("dfu {:?}", dfu_prefix);
     let mut ap = [""; 5];
     let mut pw = ["".as_bytes(); 5];
     for i in 0usize..5 {
@@ -236,44 +246,154 @@ async fn main(spawner: Spawner) -> () {
     info!("Stack is up!");
     // END NETWORKING_SETUP
 
-    // TEMP just retrieve a URL, anything
-    let mut rx_buffer = [0; 4096];
+    let mut rx_buffer = [0u8; 4096]; // TODO changed from "0", check for consequence
     let client_state = TcpClientState::<1, 4096, 4096>::new();
     let tcp_client = TcpClient::new(stack, &client_state);
     let dns_client = DnsSocket::new(stack);
     let mut http_client = HttpClient::new(&tcp_client, &dns_client);
 
-    if let Ok(mut request) = http_client.request(Method::GET, dfu).await {
-        if let Ok(response) = request.send(&mut rx_buffer).await {
-            match response.status.0 {
-                200 => {
-                    info!("Response status {}", response.status.0);
+    // Do telemetry dump interactions
+    // telemetry(&mut http_client).await.expect("succeeded");
+
+    // Firmware update, after check.
+    let version: usize = VERSION.split('.').next().expect("str").parse::<usize>().expect("number");
+    info!("VERSION:{}", version);
+    let mut req_buf: String<80, u8> = String::new();
+    let mut i = 0;
+    if let Some(mut resource) = loop {
+        info!("loop on {} with prefix {:?}", i, dfu_prefix[i]);
+        if !dfu_prefix[i].is_empty() {
+            req_buf.truncate(0);
+            req_buf.push_str(dfu_prefix[i]).expect("capacity");
+            req_buf.push_str(DFU_PATH).expect("capacity");
+            info!(" full path {}", req_buf);
+            if let Ok(mut resource) = http_client.resource(req_buf.as_str()).await {
+                let request = resource.get("version");
+                if let Ok(response) = request.send(&mut rx_buffer).await {
+                    info!(" response {:?}", response);
+                    if response.status.is_successful() {
+                        info!("Response status:{} type:{:?} len:{:?} tenc:{:?}, ka:{:?}",
+                              response.status.0,
+                              response.content_type,
+                              response.content_length,
+                              response.transfer_encoding,
+                              response.keep_alive,
+                        );
+                        let ver_as_str = str::from_utf8(response.body().read_to_end().await
+                                                        .expect("version in body")
+                        ).expect("utf8");
+                        let ver_as_num = ver_as_str.split('.').next().expect("str").parse::<usize>().expect("number");
+                        if ver_as_num > version {
+                            info!("DFU {} newer than {}, proceed with update", ver_as_str, version);
+                            break Some(resource);
+                        } else {
+                            info!("DFU {} not newer than {}, sit pat", ver_as_str, version);
+                            break None;
+                        }
+                    } else {
+                        warn!("Unexpected status {} from {}", response.status.0, req_buf);
+                    };
+                } else {
+                    warn!("Failed to send HTTP request to {} {}", req_buf, "version");
                 }
-                _ => panic!("Unexpected DFU response status {}", response.status.0),
-            };
+            } else {
+                warn!("Failed to make resource at {}", req_buf)
+            }
         } else {
-            error!("Failed to send HTTP request");
+            warn!("No resource");
         }
-        error!("Failed to create HTTP request.");
+        i += 1;
+        if i >= dfu_prefix.len() {
+            break None;
+        }
+    } {
+        // Get size
+        let size_rsp = resource.get("size")
+            .send(&mut rx_buffer).await
+            .expect("size rsp");
+        let size = str::from_utf8(
+            if size_rsp.status.is_successful() {
+                size_rsp.body().read_to_end().await
+            } else {
+                panic!("unexpected size rsp status {}", size_rsp.status.0);
+            }
+            .expect("size in body")
+        ).expect("utf8").parse::<usize>().expect("usize");
+
+        // get binary, one page at a time. Be sure the resource doesn't change part way.
+        let mut etag: String<64, u8> = String::new();
+        for start_byte in (0..size).step_by(4096) {
+            let end_byte = if start_byte + 4096 < size {
+                start_byte + 4096
+            } else {
+                size
+            };
+            let mut start_buf = itoa::Buffer::new();
+            let mut end_buf = itoa::Buffer::new();
+            let mut range_value: String<32, u8> = String::new();
+            let _ = range_value.push_str("bytes=");
+            let _ = range_value.push_str(start_buf.format(start_byte));
+            let _ = range_value.push('-');
+            let _ = range_value.push_str(end_buf.format(end_byte));
+            let range_tuple = ("Range", range_value.as_str());
+            let mut etag_value: String<64, u8> = String::new();
+            let _ = etag_value.push_str(&etag);
+            let etag_tuple = if etag.len() > 0 {
+                ("If-Range", etag_value.as_str())
+            } else {
+                ("X-Placeholder", "no-value")
+            };
+            let h = [ range_tuple, etag_tuple ];
+            let chunk_rsp = if etag.len() > 0 {
+                resource.get(BIN_FILE_NAME)
+                    .headers(&h)
+                    .send(&mut rx_buffer).await.expect("send chunk req")
+            } else {
+                resource.get(BIN_FILE_NAME)
+                    .headers(&h)
+                    .send(&mut rx_buffer).await.expect("send chunk req")
+            };
+            if chunk_rsp.status.is_successful() {
+                // Ensure response is 206 not 200. Conditional req failed if 200.
+                if chunk_rsp.status.0 == 200 {
+                    error!("If-Range request rejected {}", range_tuple.1);
+                    panic!("DFU fail");
+                }
+
+                for h in chunk_rsp.headers() {
+                    match h {
+                        ("Content-Range", value) => {
+                            let val_str = str::from_utf8(value).expect("utf8");
+                            let slash = val_str.find('/').expect("size trails");
+                            let size_here: usize = val_str[slash+1..].parse::<usize>().expect("num");
+                            if size_here != size {
+                                error!("size in {} isn't {}", value, size);
+                                panic!("DFU changed");
+                            }
+                        },
+                        ("ETag", value) => if etag.len() == 0 {
+                            let _ = etag.push_str(str::from_utf8(value).expect("utf8"));
+                        },
+                        (_, _) => (),
+                    };
+                }
+
+                let mut chunk_buffer: [_; 4096] = [0u8; 4096];
+                chunk_rsp.body().reader().read_exact(&mut chunk_buffer).await
+                    .expect("read_exact");
+                updater.write_firmware(start_byte, &chunk_buffer).expect("write_firmware");
+            } else {
+                error!("DFU fail status:{} at {}", chunk_rsp.status.0, range_tuple.1);
+                panic!("DFU fail");
+            }
+        }
+        updater.mark_updated().expect("mark_updated");
+    } else {
+        error!("Found no usable DFUx url");
     }
 
-    // from here, green RGB blinks off when network operations are in .await
-    // take_indicators();
-    // if connect() {
-    // indicators_sending();
-    // send_telemetry();
-    // indicators_retrieving();
-    // if retrieve_dfu_state() {
-    //   retrieve_and_write_dfu();
-    // reset();
-    //   }
-    // }
-    // release_indicators();
-
-    // Motorcycle: reset the controller after one network cycle.
-    // Other uses would want other action.
-    //reset();
     panic!("Deliberate panic to stop the show");
+
 }
 
 #[allow(dead_code)]

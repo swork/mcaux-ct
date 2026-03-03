@@ -34,7 +34,7 @@ read_flasher_rtt = false
 # When flashing is enabled as well, the target will be reset after flashing regardless of this setting.
 enabled = true
 # Whether or not the target should be halted after reset.
-halt_afterwards = false
+halt_afterwards = true
 
 [default.general]
 # The chip name of the chip to be debugged.
@@ -47,9 +47,6 @@ chip_descriptions = []
 log_level = "INFO"
 # Use this flag to assert the nreset & ntrst pins during attaching the probe to the chip.
 connect_under_reset = false
-
-[nortt.rtt]
-enabled = false
 
 [default.rtt]
 # Whether or not an RTTUI should be opened after flashing.
@@ -103,11 +100,15 @@ tabs = [
     # { up_channel = 1, hide = true },
 ]
 
-[nogdb.gdb]
-enabled = false
-
 [default.gdb]
 # Whether or not a GDB server should be opened after flashing.
 enabled = true
 # The connection string in host:port format where the GDB server will open a socket.
 gdb_connection_string = "127.0.0.1:1337"
+
+[nortt]
+rtt.enabled = false
+
+[nogdb]
+gdb.enabled = false
+reset.halt_afterwards = false
