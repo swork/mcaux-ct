@@ -2,6 +2,16 @@ on: [push, pull_request, workflow_dispatch]
 
 name: CI rp235x
 
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 env:
   RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
@@ -84,7 +94,8 @@ jobs:
 
       - name: upload
         id: deployment
-        run: tar --dereference --hard-dereference --directory _site -cvf "$RUNNER_TEMP/artifact.tar" --exclude .git --exclude .github .
+        uses: actions/upload-pages-artifact@v3
+#        run: tar --dereference --hard-dereference --directory _site -cvf "$RUNNER_TEMP/artifact.tar" --exclude .git --exclude .github .
 
   deploy:
     environment:
