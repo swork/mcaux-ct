@@ -83,7 +83,7 @@ jobs:
           cp target/thumbv8m.main-none-eabihf/release/mcaux-app $RELDIR/release.elf
           (cd $RELDIR && arm-none-eabi-objcopy -O binary -S release.elf release.bin)
           cargo metadata --format-version 1 --no-deps|jq -r '.packages[0].version' > $RELDIR/version
-          ls -l $RELDIR/release.bin | awk '{print $4}' > size
+          ls -l $RELDIR/release.bin | awk '{print $4}' > $RELDIR/size
 
       - name: Prove the resulting site matches expectations
         run: ls -lR _site
