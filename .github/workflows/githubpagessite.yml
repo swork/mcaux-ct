@@ -81,7 +81,7 @@ jobs:
           export RELDIR
           mkdir -p $RELDIR
           cp target/thumbv8m.main-none-eabihf/release/mcaux-app $RELDIR/release.elf
-          (cd $RELDIR && arm-none-eabi-objcopy -O bin -S release.elf release.bin)
+          (cd $RELDIR && arm-none-eabi-objcopy -O binary -S release.elf release.bin)
           cargo metadata --format-version 1 --no-deps|jq -r '.packages[0].version' > $RELDIR/version
           ls -l $RELDIR/release.bin | awk '{print $4}' > size
 
