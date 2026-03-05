@@ -293,7 +293,6 @@ pub async fn main_rp(
 
     loop {
         info!("Top of loop");
-        tc.send(Telemetry::Alive).await; // watchdog management
 
         switch_controller.remap();
 
@@ -357,6 +356,7 @@ pub async fn main_rp(
         };
 
         blinker.set_high();
+        tc.send(Telemetry::Alive).await; // watchdog management, and marks new firmware Okay
 
         // timeout case
         if abstract_input_update.is_none() {
@@ -369,7 +369,15 @@ pub async fn main_rp(
         let isclosed = abstract_input_update.isclosed;
         switch_controller.switch[idx].isclosed = isclosed;
 
-        // dfu::mark_okay_idempotent();
+        // TEMP but probably for a long time: If all three switches are down,
+        // trigger telemetry update and DFU
+        if switch_controller.switch[sw_usb_i].isclosed
+              && switch_controller.switch[sw_auxlight_i].isclosed
+              && switch_controller.switch[sw_gripheat_i].isclosed
+        {
+            info!("All three buttons are pushed, trigger comms");
+            tc.send(Telemetry::Update).await;
+        }
 
         // And around the loop. Processing switch changes is at the
         // top to establish initial conditions.

@@ -8,6 +8,7 @@ compile_error!("feature \"rp2040\" and feature \"rp235xa\" must not both be spec
 compile_error!("one or the other of feature \"rp2040\" and \"rp235xa\" must be specified");
 
 use aligned::A4;
+use cortex_m_rt::exception;
 use core::cell::RefCell;
 use cyw43::JoinOptions;
 use cyw43_pio::{DEFAULT_CLOCK_DIVIDER, PioSpi};
@@ -29,6 +30,7 @@ use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::Duration;
+#[allow(unused)]
 use embedded_io_async::Read;
 use heapless::String;
 use mcaux::{
@@ -54,10 +56,35 @@ const FLASH_SIZE: usize = 2 * 1024 * 1024;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const BIN_FILE_NAME: &str = "release.bin";
 
-// Alternative to panic_probe, which has yet to make sense to me
+#[unsafe(no_mangle)]
+#[cfg_attr(target_os = "none", unsafe(link_section = ".HardFault.user"))]
+unsafe extern "C" fn HardFault() {
+    cortex_m::peripheral::SCB::sys_reset();
+}
+
+#[exception]
+unsafe fn DefaultHandler(_: i16) -> ! {
+    const SCB_ICSR: *const u32 = 0xE000_ED04 as *const u32;
+    let irqn = unsafe { core::ptr::read_volatile(SCB_ICSR) } as u8 as i16 - 16;
+
+    panic!("DefaultHandler #{:?}", irqn);
+}
+
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    error!("Panic, {}", info);
+    if let Some(l) = info.location() {
+        if let Some(m) = info.message().as_str() {
+            error!("Panic: {} (at {}:{}:{})", m, l.file(), l.line(), l.column());
+        } else {
+            error!("Panic: {:?} (at {}:{}:{})", info, l.file(), l.line(), l.column());
+        }
+    } else {
+        if let Some(m) = info.message().as_str() {
+            error!("Panic: {}", m);
+        } else {
+            error!("Panic: {}", info);
+        }
+    }
     cortex_m::asm::udf();
     #[allow(unreachable_code)] // else they complain about "-> !" above
     loop {}
@@ -124,8 +151,6 @@ async fn main(spawner: Spawner) -> () {
     };
     // param is max item count, strings plus blobs
     let config: conf::Conf<20> = conf::Conf::new(utility_section);
-    let dfu_prefix: [&str; 1] = ["https://httpbin.org/json"];
-    /*
     let dfu_prefix: [&str; 3] = [0u8, 1, 2].map(|i| {
         if let Some(url) = config.get_value_by_key_n(b"DFU", i) {
             info!("dfu {} {}", i, url);
@@ -134,7 +159,6 @@ async fn main(spawner: Spawner) -> () {
             ""
         }
     });
-    */
     info!("dfu {:?}", dfu_prefix);
     let mut ap = [""; 5];
     let mut pw = ["".as_bytes(); 5];
@@ -173,9 +197,12 @@ async fn main(spawner: Spawner) -> () {
         // watchdog on behalf of the application's main loop.                       //
         //////////////////////////////////////////////////////////////////////////////
         while let Telemetry::Alive = telemetry_receiver.receive().await {
+            info!("watchdog.feed");
             watchdog.feed(WATCHDOG_TIMEOUT);
         }
+        info!("BEGIN COMMUNICATIONS");
     }
+
 
     let pwr = Output::new(p.PIN_23, Level::Low);
     let cs = Output::new(p.PIN_25, Level::High);
@@ -371,6 +398,7 @@ async fn main(spawner: Spawner) -> () {
             .expect("size in body"),
         )
         .expect("utf8")
+        .trim()
         .parse::<usize>()
         .expect("usize");
 
@@ -378,9 +406,9 @@ async fn main(spawner: Spawner) -> () {
         let mut etag: String<64, u8> = String::new();
         for start_byte in (0..size).step_by(4096) {
             let end_byte = if start_byte + 4096 < size {
-                start_byte + 4096
+                start_byte + 4096 - 1
             } else {
-                size
+                size - 1
             };
             let mut start_buf = itoa::Buffer::new();
             let mut end_buf = itoa::Buffer::new();
@@ -404,7 +432,7 @@ async fn main(spawner: Spawner) -> () {
                 .headers(&h)
                 .send(&mut rx_buffer)
                 .await
-                .expect("send chunk req");
+                .expect("chunk_rsp");
             if chunk_rsp.status.is_successful() {
                 // Ensure response is 206 not 200. Conditional req failed if 200.
                 if chunk_rsp.status.0 == 200 {
@@ -418,7 +446,7 @@ async fn main(spawner: Spawner) -> () {
                             let val_str = str::from_utf8(value).expect("utf8");
                             let slash = val_str.find('/').expect("size trails");
                             let size_here: usize =
-                                val_str[slash + 1..].parse::<usize>().expect("num");
+                                val_str[slash + 1..].trim().parse::<usize>().expect("num");
                             if size_here != size {
                                 error!("size in {} isn't {}", value, size);
                                 panic!("DFU changed");
@@ -438,7 +466,7 @@ async fn main(spawner: Spawner) -> () {
                 chunk_rsp
                     .body()
                     .reader()
-                    .read_exact(&mut chunk_buffer)
+                    .read_to_end(&mut chunk_buffer)
                     .await
                     .expect("read_exact");
                 watchdog.start(WATCHDOG_TIMEOUT);

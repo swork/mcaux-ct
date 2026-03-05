@@ -320,6 +320,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "embassy-executor-timer-queue"
+version = "0.1.0"
+
+[[package]]
 name = "embassy-futures"
 version = "0.1.2"
 
@@ -349,6 +353,8 @@ dependencies = [
  "embassy-hal-internal",
  "embassy-sync",
  "embassy-time",
+ "embassy-time-driver",
+ "embassy-time-queue-utils",
  "embassy-usb-driver",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
@@ -400,6 +406,14 @@ name = "embassy-time-driver"
 version = "0.2.1"
 dependencies = [
  "document-features",
+]
+
+[[package]]
+name = "embassy-time-queue-utils"
+version = "0.3.0"
+dependencies = [
+ "embassy-executor-timer-queue",
+ "heapless",
 ]
 
 [[package]]
@@ -655,7 +669,7 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "mcaux-boot"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "cfg-if",
  "cortex-m",

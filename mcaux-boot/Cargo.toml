@@ -1,28 +1,25 @@
 [package]
 edition = "2024"
 name = "mcaux-boot"
-version = "0.1.0"
+version = "0.2.1"
 description = "Bootloader for mcaux-app"
 license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-defmt = { version = "1.0.1", optional = true }
-defmt-rtt = { version = "1.0.0", optional = true }
-
-embassy-rp = { version = "0.9.0", path = "../embassy/embassy-rp", features = ["imagedef-secure-exe",]}
-embassy-boot-rp = { version = "0.9.0", path = "../embassy/embassy-boot-rp" }
-embassy-sync = { version = "0.7.2", path = "../embassy/embassy-sync" }
-embassy-time = { version = "0.5.0", features = [], path = "../embassy/embassy-time" }
-
+cfg-if = "1.0.0"
 cortex-m = { version = "0.7.6", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = { version = "0.7" }
+defmt = { version = "1.0.1", optional = true }
+defmt-rtt = { version = "1.0.0", optional = true }
 embedded-storage = "0.3.1"
 embedded-storage-async = "0.4.0"
-cfg-if = "1.0.0"
+embassy-boot-rp = { path = "../embassy/embassy-boot-rp" }
+embassy-rp = { path = "../embassy/embassy-rp", features = ["imagedef-secure-exe", "time-driver"]}
+embassy-sync = { path = "../embassy/embassy-sync" }
+embassy-time = { path = "../embassy/embassy-time" }
 
 [features]
-default = ["rp235xa"]
 rp235xa = ["embassy-rp/rp235xa"]
 rp2040 = ["embassy-rp/rp2040"]
 defmt = [
@@ -31,6 +28,8 @@ defmt = [
     "embassy-boot-rp/defmt",
     "embassy-rp/defmt",
 ]
+blink = []
+uart = []
 
 [profile.release]
 debug = true

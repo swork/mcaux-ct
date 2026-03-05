@@ -4,14 +4,19 @@ use std::io::Write;
 use std::path::PathBuf;
 
 fn main() {
-    println!("cargo:warning=CARGO_CFG_FEATURE={}", env::var("CARGO_CFG_FEATURE").unwrap());
-    println!("cargo:warning=CARGO_FEATURE_RP235XA={}", env::var("CARGO_FEATURE_RP235XA").unwrap());
+    println!(
+        "cargo:warning=CARGO_CFG_FEATURE={}",
+        env::var("CARGO_CFG_FEATURE").unwrap()
+    );
+    println!(
+        "cargo:warning=CARGO_FEATURE_RP235XA={}",
+        env::var("CARGO_FEATURE_RP235XA").unwrap()
+    );
 
     #[cfg(all(feature = "rp2040", feature = "rp235xa"))]
     compile_error!("feature \"rp2040\" and feature \"rp235xa\" must not both be specified");
     #[cfg(not(any(feature = "rp2040", feature = "rp235xa")))]
     compile_error!("one or the other of feature \"rp2040\" and \"rp235xa\" must be specified");
-
 
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     println!("cargo:rustc-link-search={}", out.display());
