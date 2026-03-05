@@ -1,2 +1,3 @@
 #!/usr/bin/env make -f
-include rp235x.mak
+
+include pico2w.mak

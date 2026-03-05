@@ -1,36 +1,10 @@
-# Mac stuff:
 .DS_Store
-
-# Unmodified emacs backup files
 *~
+b/
+dist/
+_site/
+logs/
+target/
 
-# Jekyll site folder
-_site
-
-# trunk output folder
-dist
-
-# Rust compile target directories:
-target
-target_ra
-target_wasm
-
-# https://github.com/lycheeverse/lychee
-.lycheecache
-
-# CI failures - is this a fix?
+# during development
 Cargo.lock
-
-# probe-rs artifacts
-mcaux-app/logs
-
-# This is selected at build time, not to be committed
-mcaux-app/memory.x
-
-# Build products
-stem.elf
-utility.bin
-utility.ihex
-
-# Added by cargo
-/target
