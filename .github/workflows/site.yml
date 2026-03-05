@@ -41,10 +41,10 @@ jobs:
           cargo install --target `rustc -vV | sed -nE 's/host: (.*)/\1/p'` --path cargo-utility-section cargo-utility-section
           cd mcaux
           make clean
-          DFU0=https://swork.github.io/mcaux-ct/DFU/ AP0=SSID PW0=password make
+          DFU0=https://swork.github.io/mcaux-ct/DFU/ AP0=SSID PW0=password make latest-tarball
           mkdir -p _site/DFU
           cp b/archive/*.tar.gz _site/DFU
-          tar -C _site/DFU -xzf mcaux_latest_pico2w.tar.gz
+          (cd _site/DFU && tar -xzf *.tar.gz)
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
