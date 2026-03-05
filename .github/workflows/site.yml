@@ -39,7 +39,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y binutils-arm-none-eabi
           cd mcaux
-          make clean && make
+          DFU0=https://swork.github.io/mcaux-ct/DFU/ AP0=SSID PW0=password make clean && make
           mkdir -p _site/DFU
           cp b/archive/*.tar.gz _site/DFU
           tar -C _site/DFU -xzf mcaux_latest_pico2w.tar.gz
