@@ -44,9 +44,9 @@ use utility_section::conf;
 use zerocopy::IntoBytes;
 
 #[cfg(feature = "rp235xa")]
-const DFU_PATH: &str = "mcaux-app/pico2w/latest/";
+const DFU_PATH: &str = "mcaux-ct/mcaux-app/pico2w/latest/";
 #[cfg(feature = "rp2040")]
-const DFU_PATH: &str = "mcaux-app/picow/latest/";
+const DFU_PATH: &str = "mcaux-ct/mcaux-app/picow/latest/";
 
 #[cfg(feature = "rp235xa")]
 const FLASH_SIZE: usize = 4 * 1024 * 1024;
