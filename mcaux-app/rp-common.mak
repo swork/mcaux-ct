@@ -41,7 +41,7 @@ dist/release-bin-size: dist/release.bin
 
 dist/release-bin-git-status dist/release-bin-git-ref: dist/release.bin
 	git status --porcelain > dist/release-bin-git-status
-	if [ -f $< ] && [ -s $< ]; then rm -f dist/release-bin-git-ref ; \
+	if [ -f dist/release-bin-git-status ] && [ -s dist/release-bin-git-status ]; then rm -f dist/release-bin-git-ref ; \
 		else git rev-parse --short HEAD > dist/release-bin-git-ref ; \
 		fi
 
