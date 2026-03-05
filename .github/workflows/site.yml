@@ -32,6 +32,18 @@ jobs:
           rustup set profile minimal
           rustup target add wasm32-unknown-unknown
 
+      - name: Build release for default target
+        run: |
+          rustup target add thumbv8m.main-none-eabihf
+          rustup target add thumbv6m-none-eabi
+          sudo apt-get update
+          sudo apt-get install -y binutils-arm-none-eabi
+          cd mcaux
+          make clean && make
+          mkdir -p _site/DFU
+          cp b/archive/*.tar.gz _site/DFU
+          tar -C _site/DFU -xzf mcaux_latest_pico2w.tar.gz
+
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
@@ -46,11 +58,11 @@ jobs:
       - name: Print current working directory
         run: pwd
 
+      - name: Wipe a few not-wanted things
+        run: rm -rf demo/target b
+
       - name: List directory contents, and demo subdir
         run: ls -al /home/runner/work/mcaux-ct/mcaux-ct/ /home/runner/work/mcaux-ct/mcaux-ct/demo /home/runner/work/mcaux-ct/mcaux-ct/demo/dist
-
-      - name: Wipe demo/target (why is this getting into artifact?)
-        run: rm -rf demo/target
 
       - name: Setup Ruby for Jekyll
         uses: ruby/setup-ruby@v1
@@ -69,35 +81,6 @@ jobs:
 
       - name: Integrate demo as "mockup" so Jekyll can build docs under "demo"
         run: mkdir _site/mockup && mv demo/dist/* _site/mockup
-
-      - name: Build release .bin for rp235x
-        run: |
-          rustup target add thumbv8m.main-none-eabihf
-          rustup target add thumbv6m-none-eabi
-          sudo apt-get update
-          sudo apt-get install -y binutils-arm-none-eabi
-          cd mcaux-app
-          cargo build
-          cargo build --release
-          # cargo build           --no-default-features --features rp2040 --target thumbv6m-none-eabi (overflows with TLS enabled)
-          cargo build --release --no-default-features --features rp2040 --target thumbv6m-none-eabi
-          RELDIR=../_site/DFU/mcaux-app/picow/latest
-          RELDIR2=../_site/DFU/mcaux-app/pico2w/latest
-          export RELDIR RELDIR2
-          mkdir -p $RELDIR
-          mkdir -p $RELDIR2
-          cp target/thumbv6m-none-eabi/release/mcaux-app $RELDIR/release.elf
-          # cp target/thumbv6m-none-eabi/debug/mcaux-app $RELDIR/debug.elf
-          (cd $RELDIR && arm-none-eabi-objcopy -O binary -S release.elf release.bin)
-          # (cd $RELDIR && arm-none-eabi-objcopy -O binary -S debug.elf debug.bin)
-          cargo metadata --format-version 1 --no-deps|jq -r '.packages[0].version' > $RELDIR/version
-          ls -l $RELDIR/release.bin | awk '{print $5}' > $RELDIR/size
-          cp target/thumbv8m.main-none-eabihf/release/mcaux-app $RELDIR2/release.elf
-          cp target/thumbv8m.main-none-eabihf/debug/mcaux-app $RELDIR2/debug.elf
-          (cd $RELDIR2 && arm-none-eabi-objcopy -O binary -S release.elf release.bin)
-          (cd $RELDIR2 && arm-none-eabi-objcopy -O binary -S debug.elf debug.bin)
-          cargo metadata --format-version 1 --no-deps|jq -r '.packages[0].version' > $RELDIR2/version
-          ls -l $RELDIR2/release.bin | awk '{print $5}' > $RELDIR2/size
 
       - name: Prove the resulting site matches expectations
         run: ls -lR _site
