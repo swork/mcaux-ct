@@ -15,6 +15,22 @@ Independent separate crates are subdirs - Rust doesn't make it easy to manage a 
 
  - mcaux-app builds the firmware to run the switches box on the motorcycle.
 
+## Cheat sheet
+
+ - Building web release packet:
+
+  1. "export DFU0=http://whatever.local/DFU/ AP0=SSID PW0=password"
+  1. "make clean && make" in same shell
+  1. dist/* to DFU URL as mcaux-ct/pico2w/latest/* (or "picow")
+
+ - Loading a Pico2W:
+
+  1. "probe-rs erase"  # to clear BOOTLOADER_STATE; overkill?
+  1. "probe-rs download nodist/utility.ihex"
+  1. "probe-rs download dist/stem.elf"
+  1. "probe-rs download dist/loader.elf"
+  1. Arrange that first subsequent boot has DFU site available. Wait out update.
+
 ## Thoughts on long press
 
 Long sw0 is now out3 on/off.

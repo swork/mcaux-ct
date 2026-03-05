@@ -7,7 +7,6 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [features]
-default = ["rp235xa"]
 stem = []
 rp235xa = ["mcaux/rp235xa", "embassy-rp/rp235xa"]
 rp2040 = ["mcaux/rp2040", "embassy-rp/rp2040"]

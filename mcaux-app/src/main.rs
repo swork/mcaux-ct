@@ -328,7 +328,7 @@ async fn main(spawner: Spawner) -> () {
             req_buf.push_str(DFU_PATH).expect("capacity");
             info!(" full path {}", req_buf);
             if let Ok(mut resource) = http_client.resource(req_buf.as_str()).await {
-                let request = resource.get("version");
+                let request = resource.get("release-bin-version");
                 watchdog.start(WATCHDOG_TIMEOUT);
                 if let Ok(response) = request.send(&mut rx_buffer).await {
                     if response.status.is_successful() {
@@ -384,7 +384,7 @@ async fn main(spawner: Spawner) -> () {
         // Get size
         watchdog.start(WATCHDOG_TIMEOUT);
         let size_rsp = resource
-            .get("size")
+            .get("release-bin-size")
             .send(&mut rx_buffer)
             .await
             .expect("size rsp");
@@ -487,7 +487,9 @@ async fn main(spawner: Spawner) -> () {
         error!("Found no usable DFUx url");
     }
 
-    panic!("Deliberate panic to stop the show");
+    info!("Enter TEMP busy-loop to end processing harmlessly");
+    loop {};
+    // panic!("Deliberate panic to stop the show");
 }
 
 #[allow(dead_code)]
