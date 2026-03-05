@@ -40,7 +40,7 @@ dist/release-bin-size: dist/release.bin
 	ls -l $@ | awk '{print $5}' > $@
 
 dist/release-bin-git-status dist/release-bin-git-ref: dist/release.bin
-	git status -s -b --porcelain > dist/release-bin-git-status
+	git status --porcelain > dist/release-bin-git-status
 	if [ -f $< ] && [ -s $< ]; then rm -f dist/release-bin-git-ref ; \
 		else git rev-parse --short HEAD > dist/release-bin-git-ref ; \
 		fi
