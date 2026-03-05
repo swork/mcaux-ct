@@ -2,12 +2,12 @@ FEATURES := $(CHIP)
 BLOBS := --blob "1,../embassy/cyw43-firmware/43439A0.bin,2" --blob "2,../embassy/cyw43-firmware/43439A0_clm.bin,2" --blob "3,../embassy/cyw43-firmware/nvram_rp2040.bin,2"
 V = "`cat b/public/release-bin-version`"
 
-b/archive/latest.tar.gz: mcaux-app
+b/archive/latest.tar.gz: mcaux
 	mkdir -p b/archive
-	mkdir -p b/tar/mcaux-ct/mcaux-app/$(BOARD)/latest && cp b/public/* b/tar/mcaux-ct/mcaux-app/$(BOARD)/latest && tar -C b/tar -czf b/archive/mcaux-ct_latest_$(BOARD).tar.gz . && rm -rf b/tar
-	mkdir -p b/tar/mcaux-ct/mcaux-app/$(BOARD)/$(V) && cp b/public/* b/tar/mcaux-ct/mcaux-app/$(BOARD)/$(V) && tar -C b/tar -czf b/archive/mcaux-ct_$(V)_$(BOARD).tar.gz . && rm -rf b/tar
+	mkdir -p b/tar/mcaux/$(BOARD)/latest && cp b/public/* b/tar/mcaux/$(BOARD)/latest && tar -C b/tar -czf b/archive/mcaux_latest_$(BOARD).tar.gz . && rm -rf b/tar
+	mkdir -p b/tar/mcaux/$(BOARD)/$(V) && cp b/public/* b/tar/mcaux/$(BOARD)/$(V) && tar -C b/tar -czf b/archive/mcaux_$(V)_$(BOARD).tar.gz . && rm -rf b/tar
 
-mcaux-app: \
+mcaux: \
 	b/private/utility.ihex \
 	b/public/release.elf \
 	b/public/release.bin \
@@ -24,12 +24,12 @@ mcaux-app: \
 b/public/release.elf:
 	mkdir -p b/public
 	cargo build --release --target $(TARGET) --features "$(FEATURES)"
-	mv target/$(TARGET)/release/mcaux-app $@
+	mv target/$(TARGET)/release/mcaux $@
 
 b/public/stem.elf:
 	mkdir -p b/public
 	cargo build --release --target $(TARGET) --features "$(FEATURES),stem"
-	mv target/$(TARGET)/release/mcaux-app $@
+	mv target/$(TARGET)/release/mcaux $@
 
 b/public/loader.elf:
 	mkdir -p b/public

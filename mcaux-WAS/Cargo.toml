@@ -1,0 +1,30 @@
+[package]
+name = "mcaux"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+rp2040 = ["embassy-rp/rp2040"]
+rp235xa = ["embassy-rp/rp235xa"]
+
+[dependencies]
+assign-resources = "0.5.0"
+cortex-m = { version = "0.7.7", features = ["inline-asm"] }
+cortex-m-rt = "0.7.5"
+critical-section = "1.2.0"
+cyw43 = { version = "0.6.0", path = "../embassy/cyw43" }
+defmt = "1.0.1"
+embassy-boot = { version = "0.6.1", path = "../embassy/embassy-boot" }
+embassy-embedded-hal = { version = "0.5.0", features = ["defmt"] , path = "../embassy/embassy-embedded-hal" }
+embassy-executor = { version = "0.9.1", features = ["arch-cortex-m", "defmt", "executor-interrupt"] , path = "../embassy/embassy-executor" }
+embassy-futures = { version = "0.1.2", path = "../embassy/embassy-futures" }
+embassy-rp = { version = "0.9.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl"] , path = "../embassy/embassy-rp" }
+embassy-sync = { version = "0.7.2", features = ["defmt"] , path = "../embassy/embassy-sync" }
+embassy-time = { version = "0.5.0", features = ["defmt", "defmt-timestamp-uptime"] , path = "../embassy/embassy-time" }
+embedded-storage-async = "0.4.1"
+fixed = "1.30.0"
+fixed-macro = "1.2.0"
+mcaux-indicators = { version = "0.1.0", path = "../mcaux-indicators" }
+momentary = { version = "0.1.0", path = "../momentary" }
+portable-atomic = { version = "1.13.0", features = ["critical-section"] }
+static_cell = "2.1.1"

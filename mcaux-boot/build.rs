@@ -22,9 +22,9 @@ fn main() {
     println!("cargo:rustc-link-search={}", out.display());
 
     let memory_x = if env::var("CARGO_FEATURE_RP235XA").is_ok() {
-        include_str!("../mcaux-app/memory-rp235xa.x")
+        include_str!("../mcaux/memory-rp235xa.x")
     } else {
-        include_str!("../mcaux-app/memory-rp2040.x")
+        include_str!("../mcaux/memory-rp2040.x")
     };
 
     // Adjust section names for bootloader
@@ -39,9 +39,9 @@ fn main() {
     f.write_all(memory_x.as_bytes()).unwrap();
 
     if env::var("CARGO_FEATURE_RP235XA").is_ok() {
-        println!("cargo:rerun-if-changed=../mcaux-app/memory-rp235xa.x");
+        println!("cargo:rerun-if-changed=../mcaux/memory-rp235xa.x");
     } else {
-        println!("cargo:rerun-if-changed=../mcaux-app/memory-rp2040.x");
+        println!("cargo:rerun-if-changed=../mcaux/memory-rp2040.x");
     }
 
     println!("cargo:rerun-if-changed=./build.rs");

@@ -1,6 +1,6 @@
 # MCAux-CT
 
- - [![mcaux-app](https://github.com/swork/mcaux-ct/actions/workflows/ci-app.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/ci-app.yml)[![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=mcaux-app)](https://deps.rs/repo/github/swork/mcaux-ct?path=mcaux-app)
+ - [![mcaux](https://github.com/swork/mcaux-ct/actions/workflows/ci-app.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/ci-app.yml)[![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=mcaux)](https://deps.rs/repo/github/swork/mcaux-ct?path=mcaux)
  - [![WASM demo](https://github.com/swork/mcaux-ct/actions/workflows/ci-demo.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/ci-demo.yml)[![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=demo)](https://deps.rs/repo/github/swork/mcaux-ct?path=demo)
  - [![site](https://github.com/swork/mcaux-ct/actions/workflows/site.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/site.yml)
 
@@ -13,7 +13,7 @@ Independent separate crates are subdirs - Rust doesn't make it easy to manage a 
 
  - demo/ builds that egui/eframe mockup of the switches mostly for testing and experimenting with momentary/. It does not (yet?) try to match the indicator animations in mcaux-rp2040, as the needs of color adjustments in egui and PWM manipulations under LED hardware are awkwardly different.
 
- - mcaux-app builds the firmware to run the switches box on the motorcycle.
+ - mcaux/ builds the firmware to run the switches box on the motorcycle.
 
 ## Cheat sheet
 
@@ -21,14 +21,14 @@ Independent separate crates are subdirs - Rust doesn't make it easy to manage a 
 
   1. "export DFU0=http://whatever.local/DFU/ AP0=SSID PW0=password"
   1. "make clean && make" in same shell
-  1. dist/* to DFU URL as mcaux-ct/pico2w/latest/* (or "picow")
+  1. b/archive/* unpacked to DFU URL
 
  - Loading a Pico2W:
 
   1. "probe-rs erase"  # to clear BOOTLOADER_STATE; overkill?
-  1. "probe-rs download nodist/utility.ihex"
-  1. "probe-rs download dist/stem.elf"
-  1. "probe-rs download dist/loader.elf"
+  1. "probe-rs download b/private/utility.ihex"
+  1. "probe-rs download b/public/stem.elf"
+  1. "probe-rs download b/public/loader.elf"
   1. Arrange that first subsequent boot has DFU site available. Wait out update.
 
 ## Thoughts on long press

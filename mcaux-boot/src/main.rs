@@ -18,7 +18,9 @@ use embassy_rp::gpio::{Level, Output};
 use embassy_rp::uart;
 
 const FLASH_SIZE: usize = 2 * 1024 * 1024;
+#[allow(unused)]
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+#[allow(unused)]
 const NAME: &str = env!("CARGO_PKG_NAME");
 
 #[entry]
@@ -105,19 +107,19 @@ unsafe fn DefaultHandler(_: i16) -> ! {
 }
 
 #[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
+fn panic(_info: &core::panic::PanicInfo) -> ! {
     #[cfg(feature = "defmt")]
-    if let Some(l) = info.location() {
-        if let Some(m) = info.message().as_str() {
+    if let Some(l) = _info.location() {
+        if let Some(m) = _info.message().as_str() {
             error!("Panic: {} (at {}:{}:{})", m, l.file(), l.line(), l.column());
         } else {
-            error!("Panic: {:?} (at {}:{}:{})", info, l.file(), l.line(), l.column());
+            error!("Panic: {:?} (at {}:{}:{})", _info, l.file(), l.line(), l.column());
         }
     } else {
-        if let Some(m) = info.message().as_str() {
+        if let Some(m) = _info.message().as_str() {
             error!("Panic: {}", m);
         } else {
-            error!("Panic: {}", info);
+            error!("Panic: {}", _info);
         }
     }
     cortex_m::asm::udf();

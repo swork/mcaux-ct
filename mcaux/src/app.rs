@@ -1,6 +1,3 @@
-#![no_std]
-#![no_main]
-
 use assign_resources::assign_resources;
 use defmt::*;
 use embassy_executor::{Spawner, task};
