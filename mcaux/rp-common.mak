@@ -5,7 +5,7 @@ V = "`cat b/public/release-bin-version`"
 b/archive/latest.tar.gz: mcaux
 	mkdir -p b/archive
 	mkdir -p b/tar/mcaux/$(BOARD)/latest && cp b/public/* b/tar/mcaux/$(BOARD)/latest && tar -C b/tar -czf b/archive/mcaux_latest_$(BOARD).tar.gz . && rm -rf b/tar
-	mkdir -p b/tar/mcaux/$(BOARD)/$(V) && cp b/public/* b/tar/mcaux/$(BOARD)/$(V) && tar -C b/tar -czf b/archive/mcaux_$(V)_$(BOARD).tar.gz . && rm -rf b/tar
+	-mkdir -p b/tar/mcaux/$(BOARD)/$(V) && cp b/public/* b/tar/mcaux/$(BOARD)/$(V) && tar -C b/tar -czf b/archive/mcaux_$(V)_$(BOARD).tar.gz . && rm -rf b/tar
 
 mcaux: \
 	b/private/utility.ihex \

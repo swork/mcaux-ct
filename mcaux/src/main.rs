@@ -9,9 +9,12 @@ compile_error!("feature \"rp2040\" and feature \"rp235xa\" must not both be spec
 #[cfg(not(any(feature = "rp2040", feature = "rp235xa")))]
 compile_error!("one or the other of feature \"rp2040\" and \"rp235xa\" must be specified");
 
+use crate::app::{
+    AssignedResources, SwitchingResources, TELEMETRY_CHANNEL_DEPTH, Telemetry, main_rp,
+};
 use aligned::A4;
-use cortex_m_rt::exception;
 use core::cell::RefCell;
+use cortex_m_rt::exception;
 use cyw43::JoinOptions;
 use cyw43_pio::{DEFAULT_CLOCK_DIVIDER, PioSpi};
 use defmt::{error, info, warn};
@@ -35,9 +38,6 @@ use embassy_time::Duration;
 #[allow(unused)]
 use embedded_io_async::Read;
 use heapless::String;
-use crate::app::{
-    AssignedResources, SwitchingResources, TELEMETRY_CHANNEL_DEPTH, Telemetry, main_rp
-};
 use reqwless::client::{HttpClient, TlsConfig, TlsVerify};
 use reqwless::request::RequestBuilder;
 use static_cell::StaticCell;
@@ -77,14 +77,18 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
         if let Some(m) = info.message().as_str() {
             error!("Panic: {} (at {}:{}:{})", m, l.file(), l.line(), l.column());
         } else {
-            error!("Panic: {:?} (at {}:{}:{})", info, l.file(), l.line(), l.column());
+            error!(
+                "Panic: {:?} (at {}:{}:{})",
+                info,
+                l.file(),
+                l.line(),
+                l.column()
+            );
         }
+    } else if let Some(m) = info.message().as_str() {
+        error!("Panic: {}", m);
     } else {
-        if let Some(m) = info.message().as_str() {
-            error!("Panic: {}", m);
-        } else {
-            error!("Panic: {}", info);
-        }
+        error!("Panic: {}", info);
     }
     cortex_m::asm::udf();
     #[allow(unreachable_code)] // else they complain about "-> !" above
@@ -203,7 +207,6 @@ async fn main(spawner: Spawner) -> () {
         }
         info!("BEGIN COMMUNICATIONS");
     }
-
 
     let pwr = Output::new(p.PIN_23, Level::Low);
     let cs = Output::new(p.PIN_25, Level::High);
@@ -489,7 +492,8 @@ async fn main(spawner: Spawner) -> () {
     }
 
     info!("Enter TEMP busy-loop to end processing harmlessly");
-    loop {};
+    #[allow(clippy::empty_loop)]
+    loop {}
     // panic!("Deliberate panic to stop the show");
 }
 

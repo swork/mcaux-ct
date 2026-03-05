@@ -369,8 +369,8 @@ pub async fn main_rp(
         // TEMP but probably for a long time: If all three switches are down,
         // trigger telemetry update and DFU
         if switch_controller.switch[sw_usb_i].isclosed
-              && switch_controller.switch[sw_auxlight_i].isclosed
-              && switch_controller.switch[sw_gripheat_i].isclosed
+            && switch_controller.switch[sw_auxlight_i].isclosed
+            && switch_controller.switch[sw_gripheat_i].isclosed
         {
             info!("All three buttons are pushed, trigger comms");
             tc.send(Telemetry::Update).await;
