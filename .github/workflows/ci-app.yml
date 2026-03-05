@@ -1,5 +1,5 @@
 
-name: CI tests for mcaux-app
+name: CI tests for mcaux
 
 on: [push, pull_request, workflow_dispatch]
 
@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mcaux-app
+        working-directory: mcaux
     steps:
       - uses: actions/checkout@v4
       - run: |
@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mcaux-app
+        working-directory: mcaux
     steps:
       - uses: actions/checkout@v4
       - run: |
@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mcaux-app
+        working-directory: mcaux
     steps:
       - uses: actions/checkout@v5
       - run: |
@@ -68,7 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mcaux-app
+        working-directory: mcaux
     steps:
       - uses: actions/checkout@master
       - run: |
