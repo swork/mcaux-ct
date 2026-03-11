@@ -8,28 +8,29 @@ publish = false
 
 [dependencies]
 cfg-if = "1.0.0"
-cortex-m = { version = "0.7.6", features = ["inline-asm", "critical-section-single-core"] }
+cortex-m = { version = "0.7.7", features = ["inline-asm"] }
 cortex-m-rt = { version = "0.7" }
 defmt = { version = "1.0.1", optional = true }
-defmt-rtt = { version = "1.0.0", optional = true }
 embedded-storage = "0.3.1"
 embedded-storage-async = "0.4.0"
 embassy-boot-rp = { path = "../embassy/embassy-boot-rp" }
-embassy-rp = { path = "../embassy/embassy-rp", features = ["imagedef-secure-exe", "time-driver"]}
+embassy-rp = { path = "../embassy/embassy-rp", features = ["unstable-pac", "critical-section-impl", "time-driver"]}
 embassy-sync = { path = "../embassy/embassy-sync" }
 embassy-time = { path = "../embassy/embassy-time" }
+itoa = "1.0.17"
+defmt-serial = { version = "0.11.0", optional = true }
+static_cell = "2.1.1"
 
 [features]
 rp235xa = ["embassy-rp/rp235xa"]
 rp2040 = ["embassy-rp/rp2040"]
 defmt = [
     "dep:defmt",
-    "dep:defmt-rtt",
+    "dep:defmt-serial",
     "embassy-boot-rp/defmt",
     "embassy-rp/defmt",
 ]
 blink = []
-uart = []
 
 [profile.release]
 debug = true

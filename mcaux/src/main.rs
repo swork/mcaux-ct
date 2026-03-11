@@ -40,6 +40,7 @@ use embedded_io_async::Read;
 use heapless::String;
 use reqwless::client::{HttpClient, TlsConfig, TlsVerify};
 use reqwless::request::RequestBuilder;
+use sha2::{Digest, Sha256};
 use static_cell::StaticCell;
 use utility_section::conf;
 use zerocopy::IntoBytes;
@@ -90,9 +91,12 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     } else {
         error!("Panic: {}", info);
     }
+
+    defmt::flush();
+    for _i in 0..1000000 {
+        cortex_m::asm::nop();
+    }
     cortex_m::asm::udf();
-    #[allow(unreachable_code)] // else they complain about "-> !" above
-    loop {}
 }
 
 // from wifi_blinky, setup to twiddle the PicoW LED (and for that matter to use
@@ -114,11 +118,10 @@ async fn cyw43_task(
 /// between them.
 #[embassy_executor::main]
 async fn main(spawner: Spawner) -> () {
-    if cfg!(feature = "stem") {
-        info!("stem v{}", VERSION);
-    } else {
-        info!("main v{}", VERSION);
-    }
+    #[cfg(feature = "stem")]
+    info!("stem v{}", VERSION);
+    #[cfg(not(feature = "stem"))]
+    info!("main v{}", VERSION);
 
     info!("1");
     let p = embassy_rp::init(Default::default());
@@ -126,7 +129,7 @@ async fn main(spawner: Spawner) -> () {
     let r = split_resources!(p);
     info!("split_resources done");
 
-    const WATCHDOG_TIMEOUT: Duration = Duration::from_secs(8);
+    const WATCHDOG_TIMEOUT: Duration = Duration::from_secs(14);
 
     // Override bootloader watchdog
     let mut watchdog = Watchdog::new(p.WATCHDOG);
@@ -183,6 +186,19 @@ async fn main(spawner: Spawner) -> () {
     let clm = config.get_blob_by_id::<A4>(2).expect("clm existence");
     let nvram = config.get_blob_by_id::<A4>(3).expect("nvram existence");
 
+    // We'll need the firmware updater to mark us Okay on first boot after update
+    let flash = Flash::<_, _, FLASH_SIZE>::new_blocking(p.FLASH);
+    let flash = Mutex::new(RefCell::new(flash));
+    let config = FirmwareUpdaterConfig::from_linkerfile_blocking(&flash, &flash);
+    let mut aligned = AlignedBuffer([0; 1]);
+    let mut updater = BlockingFirmwareUpdater::new(config, &mut aligned.0);
+    let mut need_mark = if matches!(updater.get_state().expect("state"), State::Boot) {
+        false
+    } else {
+        info!("Update needs to be marked okay, if app loop completes");
+        true
+    };
+
     if !cfg!(feature = "stem") {
         type TelemetryChannel =
             Channel<CriticalSectionRawMutex, Telemetry, TELEMETRY_CHANNEL_DEPTH>;
@@ -204,6 +220,13 @@ async fn main(spawner: Spawner) -> () {
         while let Telemetry::Alive = telemetry_receiver.receive().await {
             info!("watchdog.feed");
             watchdog.feed(WATCHDOG_TIMEOUT);
+            if need_mark {
+                info!("App loop completed, mark update Booted (all done with successful update)");
+                defmt::flush();
+                embassy_time::Timer::after(Duration::from_secs(1)).await;
+                updater.mark_booted().expect("marked booted");
+                need_mark = false;
+            }
         }
         info!("BEGIN COMMUNICATIONS");
     }
@@ -243,18 +266,6 @@ async fn main(spawner: Spawner) -> () {
         seed,
     );
     // END NETWORK SETUP BLOCK
-
-    let flash = Flash::<_, _, FLASH_SIZE>::new_blocking(p.FLASH);
-    let flash = Mutex::new(RefCell::new(flash));
-    let config = FirmwareUpdaterConfig::from_linkerfile_blocking(&flash, &flash);
-    let mut aligned = AlignedBuffer([0; 1]);
-    let mut updater = BlockingFirmwareUpdater::new(config, &mut aligned.0);
-
-    if !cfg!(feature = "stem")
-        && !matches!(updater.get_state().expect("DFU get_state"), State::Boot)
-    {
-        updater.mark_booted().unwrap();
-    }
 
     // Delayed until network is requested. Saves dhcp operations when link is
     // down. Another application, one that expects to do networking on an
@@ -298,6 +309,7 @@ async fn main(spawner: Spawner) -> () {
     // END NETWORKING_SETUP
 
     let mut rx_buffer = [0u8; 4096]; // TODO changed from "0", check for consequence
+    let mut sha_buffer = [0u8; 4096];
     let mut tls_read_buffer = [0; 16640];
     let mut tls_write_buffer = [0; 16640];
     let client_state = TcpClientState::<1, 4096, 4096>::new();
@@ -324,7 +336,7 @@ async fn main(spawner: Spawner) -> () {
     info!("VERSION:{}", version);
     let mut req_buf: String<80, u8> = String::new();
     let mut i = 0;
-    if let Some(mut resource) = loop {
+    if let Ok(Some(mut resource)) = loop {
         info!("loop on {} with prefix {:?}", i, dfu_prefix[i]);
         if !dfu_prefix[i].is_empty() {
             req_buf.truncate(0);
@@ -332,7 +344,7 @@ async fn main(spawner: Spawner) -> () {
             req_buf.push_str(DFU_PATH).expect("capacity");
             info!(" full path {}", req_buf);
             if let Ok(mut resource) = http_client.resource(req_buf.as_str()).await {
-                let request = resource.get("release-bin-version");
+                let request = resource.get("release.bin.version");
                 watchdog.start(WATCHDOG_TIMEOUT);
                 if let Ok(response) = request.send(&mut rx_buffer).await {
                     if response.status.is_successful() {
@@ -351,22 +363,26 @@ async fn main(spawner: Spawner) -> () {
                                 .await
                                 .expect("version in body"),
                         )
-                        .expect("utf8");
+                        .expect("utf8")
+                        .trim();
                         let ver_as_num = ver_as_str
                             .split('.')
                             .next()
                             .expect("str")
                             .parse::<usize>()
                             .expect("number");
-                        if ver_as_num > version {
+                        if cfg!(feature = "stem") {
+                            info!("Stem loading firmware {}", ver_as_str);
+                            break Ok(Some(resource));
+                        } else if ver_as_num > version {
                             info!(
                                 "DFU {} newer than {}, proceed with update",
                                 ver_as_str, version
                             );
-                            break Some(resource);
+                            break Ok(Some(resource));
                         } else {
                             info!("DFU {} not newer than {}, sit pat", ver_as_str, version);
-                            break None;
+                            break Ok(None);
                         }
                     } else {
                         warn!("Unexpected status {} from {}", response.status.0, req_buf);
@@ -382,33 +398,57 @@ async fn main(spawner: Spawner) -> () {
         }
         i += 1;
         if i >= dfu_prefix.len() {
-            break None;
+            error!("Found no usable access point or DFU update site");
+            break Err(());
         }
     } {
-        // Get size
+        // Get HEAD
         watchdog.start(WATCHDOG_TIMEOUT);
-        let size_rsp = resource
-            .get("release-bin-size")
+        let head_rsp = resource
+            .head("release.bin")
             .send(&mut rx_buffer)
             .await
-            .expect("size rsp");
-        let size = str::from_utf8(
-            if size_rsp.status.is_successful() {
-                watchdog.start(WATCHDOG_TIMEOUT);
-                size_rsp.body().read_to_end().await
+            .expect("head_rsp");
+        let size = if head_rsp.status.is_successful() {
+            if head_rsp.content_length.is_some() {
+                head_rsp.content_length.unwrap()
             } else {
-                panic!("unexpected size rsp status {}", size_rsp.status.0);
+                panic!("Can't find content-length in HEAD response");
             }
-            .expect("size in body"),
-        )
-        .expect("utf8")
-        .trim()
-        .parse::<usize>()
-        .expect("usize");
+        } else {
+            panic!("Failed getting DFU HEAD: {:?}", head_rsp.status);
+        };
+        info!("HEAD for release.bin says size is {}", size);
+
+        embassy_time::Timer::after(Duration::from_secs(1)).await; // TEMP pause for defmt to catch up?
+
+        // Get hash
+        watchdog.start(WATCHDOG_TIMEOUT);
+        let sha_rsp = resource
+            .get("release.bin.sha256")
+            .send(&mut sha_buffer)
+            .await
+            .expect("sha rsp");
+        let sha = if sha_rsp.status.is_successful() {
+            watchdog.start(WATCHDOG_TIMEOUT);
+            let mut body = sha_rsp.body().read_to_end().await.expect("sha body");
+            while body[body.len() - 1] == 10u8 {
+                let e = body.len() - 1;
+                let shortened = &mut body[..e];
+                body = shortened;
+            }
+            body
+        } else {
+            panic!("unexpected sha rsp status {}", sha_rsp.status.0);
+        };
 
         // get binary, one page at a time. Be sure the resource doesn't change part way.
+        let mut hasher = Sha256::new();
         let mut etag: String<64, u8> = String::new();
-        for start_byte in (0..size).step_by(4096) {
+        for start_byte in (0..).step_by(4096) {
+            if start_byte >= size {
+                break;
+            }
             let end_byte = if start_byte + 4096 < size {
                 start_byte + 4096 - 1
             } else {
@@ -467,16 +507,25 @@ async fn main(spawner: Spawner) -> () {
 
                 let mut chunk_buffer: [_; 4096] = [0u8; 4096];
                 watchdog.start(WATCHDOG_TIMEOUT);
-                chunk_rsp
+                let clen = chunk_rsp
                     .body()
                     .reader()
                     .read_to_end(&mut chunk_buffer)
                     .await
                     .expect("read_exact");
                 watchdog.start(WATCHDOG_TIMEOUT);
+                let s = end_byte - start_byte + 1;
+                info!(
+                    "bytes read:{} end:{}, start:{}, intended size:{}",
+                    clen, end_byte, start_byte, s
+                );
+                hasher.update(&chunk_buffer[..s]);
                 updater
-                    .write_firmware(start_byte, &chunk_buffer)
+                    .write_firmware(start_byte, &chunk_buffer[..s])
                     .expect("write_firmware");
+                if start_byte + clen >= size {
+                    break;
+                }
             } else {
                 error!(
                     "DFU fail status:{} at {}",
@@ -486,15 +535,33 @@ async fn main(spawner: Spawner) -> () {
             }
         }
         watchdog.start(WATCHDOG_TIMEOUT);
-        updater.mark_updated().expect("mark_updated");
+        let sha_calculated = hasher.finalize();
+        let sha_calculated_string = faster_hex::hex_string::<64>(sha_calculated.as_bytes());
+        let sha_calculated_hexbytes = sha_calculated_string.as_bytes();
+        if sha_calculated_hexbytes == sha {
+            updater.mark_updated().expect("mark_updated");
+            info!("Hash matches, Marked updated");
+        } else {
+            error!("Hash did NOT match, NOT marking updated");
+            info!("Hash expected:  {}", sha.as_bytes());
+            info!("Hash calculated:{}", sha_calculated_hexbytes);
+        }
     } else {
-        error!("Found no usable DFUx url");
+        info!("Nothing to do for firmware update.");
     }
 
-    info!("Enter TEMP busy-loop to end processing harmlessly");
+    info!("Loop until watchdog bites...");
     #[allow(clippy::empty_loop)]
-    loop {}
-    // panic!("Deliberate panic to stop the show");
+    loop {
+        cortex_m::asm::nop();
+    }
+    /*
+        info!("Resetting...");
+        unsafe extern "C" {
+            pub fn Reset();
+        }
+        unsafe { Reset() };
+    */
 }
 
 #[allow(dead_code)]

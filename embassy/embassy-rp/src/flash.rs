@@ -22,7 +22,10 @@ pub const BOOTRAM_BASE: *const u32 = 0x400e0000 as _;
 
 /// If running from RAM, we might have no boot2. Use bootrom `flash_enter_cmd_xip` instead.
 // TODO: when run-from-ram is set, completely skip the "pause cores and jumpp to RAM" dance.
-pub const USE_BOOT2: bool = !cfg!(feature = "run-from-ram") | cfg!(feature = "_rp235x");
+#[cfg(feature = "_rp235x")]
+pub const USE_BOOT2: bool = !cfg!(feature = "run-from-ram");
+#[cfg(not(feature = "_rp235x"))]
+pub const USE_BOOT2: bool = false;
 
 // **NOTE**:
 //
@@ -124,11 +127,13 @@ impl<'d, T: Instance, M: Mode, const FLASH_SIZE: usize> Flash<'d, T, M, FLASH_SI
     ///
     /// NOTE: `offset` is an offset from the flash start, NOT an absolute address.
     pub fn blocking_read(&mut self, offset: u32, bytes: &mut [u8]) -> Result<(), Error> {
+        /*
         trace!(
             "Reading from 0x{:x} to 0x{:x}",
             FLASH_BASE as u32 + offset,
             FLASH_BASE as u32 + offset + bytes.len() as u32
         );
+        */
         check_read(self, offset, bytes.len())?;
 
         let flash_data = unsafe { core::slice::from_raw_parts((FLASH_BASE as u32 + offset) as *const u8, bytes.len()) };
@@ -146,13 +151,12 @@ impl<'d, T: Instance, M: Mode, const FLASH_SIZE: usize> Flash<'d, T, M, FLASH_SI
     ///
     /// NOTE: `offset` is an offset from the flash start, NOT an absolute address.
     pub fn blocking_erase(&mut self, from: u32, to: u32) -> Result<(), Error> {
-        check_erase(self, from, to)?;
-
         trace!(
             "Erasing from 0x{:x} to 0x{:x}",
             FLASH_BASE as u32 + from,
             FLASH_BASE as u32 + to
         );
+        check_erase(self, from, to)?;
 
         let len = to - from;
 

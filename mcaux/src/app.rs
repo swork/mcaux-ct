@@ -287,6 +287,7 @@ pub async fn main_rp(
 
     let switches_receiver = SWITCHES_CHANNEL.dyn_receiver();
     let indicator_sender = INDICATOR_CHANNEL.sender();
+    let mut one_full_loop_completed = false;
 
     loop {
         info!("Top of loop");
@@ -353,7 +354,10 @@ pub async fn main_rp(
         };
 
         blinker.set_high();
-        tc.send(Telemetry::Alive).await; // watchdog management, and marks new firmware Okay
+        if one_full_loop_completed {
+            tc.send(Telemetry::Alive).await; // watchdog management, and marks new firmware Okay
+        }
+        one_full_loop_completed = true;
 
         // timeout case
         if abstract_input_update.is_none() {

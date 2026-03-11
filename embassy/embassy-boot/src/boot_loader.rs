@@ -344,18 +344,27 @@ impl<ACTIVE: NorFlash, DFU: NorFlash, STATE: NorFlash> BootLoader<ACTIVE, DFU, S
         to_offset: u32,
         aligned_buf: &mut [u8],
     ) -> Result<(), BootError> {
-        if self.current_progress(aligned_buf)? <= progress_index {
+        trace!("copy_page_once_to_active idx:{:08x} from:{:08x} to:{:08x} check progress", progress_index, from_offset, to_offset);
+        let p = self.current_progress(aligned_buf)?;
+        trace!("current progress:{:08x}", p);
+
+        if p <= progress_index {
             let page_size = Self::PAGE_SIZE as u32;
 
+            trace!("erase active offset:{:08x} page_size:{:08x}", to_offset, page_size);
             self.active.erase(to_offset, to_offset + page_size)?;
 
             for offset_in_page in (0..page_size).step_by(aligned_buf.len()) {
+                trace!("read dfu from_offset:{:08x} offset_in_page:{:08x} len:{}", from_offset, offset_in_page, aligned_buf.len());
                 self.dfu.read(from_offset + offset_in_page as u32, aligned_buf)?;
+                trace!("write active to_offset:{:08x}", to_offset);
                 self.active.write(to_offset + offset_in_page as u32, aligned_buf)?;
             }
 
+            trace!("update_progress idx:{:08x}", progress_index);
             self.update_progress(progress_index, aligned_buf)?;
         }
+        trace!("copy_page_once_to_active succeeded");
         Ok(())
     }
 
@@ -366,18 +375,27 @@ impl<ACTIVE: NorFlash, DFU: NorFlash, STATE: NorFlash> BootLoader<ACTIVE, DFU, S
         to_offset: u32,
         aligned_buf: &mut [u8],
     ) -> Result<(), BootError> {
-        if self.current_progress(aligned_buf)? <= progress_index {
+        trace!("In copy_page_once_to_dfu idx:{:08x} from:{:08x} to:{:08x}. .current_progress...", progress_index, from_offset, to_offset);
+        let p = self.current_progress(aligned_buf)?;
+        trace!("current progress:{:08x}", p);
+
+        if p <= progress_index {
             let page_size = Self::PAGE_SIZE as u32;
 
+            trace!("erase dfu offset:{:08x} page_size:{:08x}", to_offset, page_size);
             self.dfu.erase(to_offset as u32, to_offset + page_size)?;
 
             for offset_in_page in (0..page_size).step_by(aligned_buf.len()) {
+                trace!("read active from_offset:{:08x} offset_in_page:{:08x} len:{}", from_offset, offset_in_page, aligned_buf.len());
                 self.active.read(from_offset + offset_in_page as u32, aligned_buf)?;
+                trace!("write dfu to_offset:{:08x}", to_offset);
                 self.dfu.write(to_offset + offset_in_page as u32, aligned_buf)?;
             }
 
+            trace!("update_progress idx:{:08x}", progress_index);
             self.update_progress(progress_index, aligned_buf)?;
         }
+        trace!("copy_page_once_to_dfu succeeded");
         Ok(())
     }
 
@@ -389,13 +407,19 @@ impl<ACTIVE: NorFlash, DFU: NorFlash, STATE: NorFlash> BootLoader<ACTIVE, DFU, S
             // Copy active page to the 'next' DFU page.
             let active_from_offset = (page_count - 1 - page_num) * Self::PAGE_SIZE;
             let dfu_to_offset = (page_count - page_num) * Self::PAGE_SIZE;
-            //trace!("Copy active {} to dfu {}", active_from_offset, dfu_to_offset);
-            self.copy_page_once_to_dfu(progress_index, active_from_offset, dfu_to_offset, aligned_buf)?;
+            trace!("Copy ACTIVE {:08x} to dfu {:08x}", active_from_offset, dfu_to_offset);
+            match self.copy_page_once_to_dfu(progress_index, active_from_offset, dfu_to_offset, aligned_buf) {
+                Ok(_) => (),
+                Err(e) => {
+                    error!("copy_page_once_to_dfu failure: {:?}", e);
+                    return Err(e);
+                },
+            }
 
             // Copy DFU page to the active page
             let active_to_offset = (page_count - 1 - page_num) * Self::PAGE_SIZE;
             let dfu_from_offset = (page_count - 1 - page_num) * Self::PAGE_SIZE;
-            //trace!("Copy dfy {} to active {}", dfu_from_offset, active_to_offset);
+            trace!("Copy dfu {:08x} to active {:08x}", dfu_from_offset, active_to_offset);
             self.copy_page_once_to_active(progress_index + 1, dfu_from_offset, active_to_offset, aligned_buf)?;
         }
 
@@ -428,6 +452,7 @@ fn assert_partitions<ACTIVE: NorFlash, DFU: NorFlash, STATE: NorFlash>(
     state: &STATE,
     page_size: u32,
 ) {
+    trace!("assert_partitions capacities active:{:x} dfu:{:x} state:{:x}", active.capacity(), dfu.capacity(), state.capacity());
     assert_eq!(active.capacity() as u32 % page_size, 0);
     assert_eq!(dfu.capacity() as u32 % page_size, 0);
     // DFU partition has to be bigger than ACTIVE partition to handle swap algorithm
