@@ -47,7 +47,7 @@ b/public/release.bin.version: b/public/release.bin
 	cargo metadata --format-version 1 --no-deps|jq -r '.packages[0].version' > $@
 
 b/public/release.bin.sha256: b/public/release.bin
-	sha256 -q $< > $@
+	rhash --sha256 --one-hash $< > $@
 
 b/public/release.bin.git-status b/public/release.bin.git-ref: b/public/release.bin
 	git status --porcelain > b/public/release.bin.git-status
