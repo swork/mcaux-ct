@@ -17,6 +17,8 @@ use embassy_rp::uart::Uart;
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_time::Duration;
 #[cfg(feature = "defmt")]
+use embassy_time::Instant;
+#[cfg(feature = "defmt")]
 use static_cell::StaticCell;
 
 #[cfg(feature = "defmt")]
@@ -44,7 +46,7 @@ fn main() -> ! {
         config.parity = embassy_rp::uart::Parity::ParityNone;
     }
     #[cfg(feature = "defmt")]
-    let mut u = Uart::new_blocking(p.UART0, p.PIN_0, p.PIN_1, config);
+    let u = Uart::new_blocking(p.UART0, p.PIN_0, p.PIN_1, config);
     #[cfg(feature = "defmt")]
     defmt_serial::defmt_serial(SERIAL.init(u));
 
