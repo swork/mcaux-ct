@@ -1,0 +1,13 @@
+image: debian/trixie
+packages:
+  - git
+  - rustup
+  - binutils-arm-none-eabi
+tasks:
+  - prep: |
+      rustup toolchain install stable
+      rustup target install thumbv8m.main-none-eabihf
+      git clone https://git.sr.ht/~scwork/mcaux-ct m
+      cargo install --path m/cargo-utility-section cargo-utility-section
+  - build: |
+      DFU0=http://example.org/DFU/ AP0=SSID PW0=password make -C m/mcaux
