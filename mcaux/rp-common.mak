@@ -17,7 +17,7 @@ b/archive/mcaux_latest_$(BOARD).tar.gz b/archive/mcaux_$(V)_$(BOARD).tar.gz: \
 		b/public/release.bin.active-addr \
 		b/public/release.bin.dfu-addr \
 		b/public/release.bin.utility-addr \
-		b/public/release.bin.git-ref \
+		b/public/release.bin.git-describe \
 		b/public/release.bin.git-status
 	mkdir -p b/archive
 	mkdir -p b/tar/mcaux/$(BOARD)/latest && cp b/public/* b/tar/mcaux/$(BOARD)/latest && tar -C b/tar -czf b/archive/mcaux_latest_$(BOARD).tar.gz . && rm -rf b/tar
@@ -49,14 +49,9 @@ b/public/release.bin.version: b/public/release.bin
 b/public/release.bin.sha256: b/public/release.bin
 	rhash --sha256 --one-hash $< > $@
 
-b/public/release.bin.git-status b/public/release.bin.git-ref: b/public/release.bin
+b/public/release.bin.git-status b/public/release.bin.git-describe: b/public/release.bin
 	git status --porcelain > b/public/release.bin.git-status
-	if [ -f b/public/release.bin.git-status ] && [ -s b/public/release.bin.git-status ]; then rm -f b/public/release.bin.git-ref ; \
-		else git rev-parse --short HEAD > b/public/release.bin.git-ref ; \
-		fi
-
-# Inconsequential whether this file exists
-.PHONY: b/public/release.bin.git-ref
+  git describe --always --dirty --broken --long > b/public/release.bin.git-describe
 
 b/public/release.bin.active-addr b/public/release.bin.dfu-addr b/public/release.bin.utility-addr: memory-rp235xa.x
 	mkdir -p b/public
