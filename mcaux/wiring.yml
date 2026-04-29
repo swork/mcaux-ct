@@ -1,0 +1,320 @@
+pico2w:
+  - complete: true
+  - connections:
+      - pin01: UART_TX
+      - pin02: NC_UART_RX
+      - pin03: GND
+        net: n02
+      - pin04: BLINK
+      - pin05: NC
+      - pin06: IND_USB
+        net: n19
+      - pin07: IND_LIGHTS
+        net: n21
+      - pin08: GND
+        net: n02
+      - pin09: IND_HEAT
+        net: n23
+      - pin10: RGB_R
+        net: n25
+      - pin11: RGB_G
+        net: n27
+      - pin12: RGB_B
+        net: n29
+      - pin13: GND
+        net: n02
+      - pin14: 1W
+        net: n05
+      - pin15: NC
+      - pin16: NC
+      - pin17: NC
+      - pin18: GND
+        net: n02
+      - pin19: NC
+      - pin20: NC
+      - pin21: OUT_USB
+        net: n06
+      - pin22: OUT_LIGHTS
+        net: n07
+      - pin23: GND
+        net: n02
+      - pin24: OUT_HEAT
+        net: n08
+      - pin25: OUT_NAV
+        net: n09
+      - pin26: SW_USB_NAV
+        net: n10
+      - pin27: SW_LIGHTS
+        net: n11
+      - pin28: GND
+        net: n02
+      - pin29: SW_HEAT
+        net: n12
+      - pin30: NC_RUN
+      - pin31: IN_HB
+        net: n18
+      - pin32: NC
+      - pin33: GND
+        net: n02
+      - pin34: NC
+      - pin35: NC
+      - pin36: 3V3_OUT
+        net: n04
+      - pin37: NC_3V3EN
+      - pin38: GND
+        net: n02
+      - pin39: 5V_IN
+        net: n03
+      - pin40: NC_VBUS
+
+thin_harness:
+  - complete: true
+  - connections:
+      - c01: SW_USB_NAV
+        net: n10
+        color: green
+      - c02: SW_LIGHTS
+        net: n11
+        color: blue
+      - c03: SW_HEAT
+        net: n12
+        color: green
+      - c04: HB_12V
+        net: n17
+        color: yellow
+      - c05: IND_USB
+        net: n05
+      - c06: IND_LIGHTS
+        net: n06
+      - c07: IND_HEAT
+        net: n07
+      - c08: IND_R
+        net: n08
+      - c09: IND_G
+        net: n09
+      - c10: IND_B
+        net: n10
+      - c11: 3V3_SW_1W
+        net: n04
+        color: blue
+      - c12: 1W
+        net: n05
+        color: black
+      - c13: 12V_OUT_IND
+        net: n01
+        color: red
+
+pwr_harness:
+  - complete: true
+  - connections:
+      - black: GND
+        net: n02
+      - white: 12V_IN
+        net: n01
+
+out_harness:
+  - complete: true
+  - connections:
+    - o01: RET_USB
+      net: n13
+    - o02: RET_LIGHTS
+      net: n14
+    - o03: RET_HEAT
+      net: n15
+    - o04: RET_NAV
+      net: n16
+
+outsw:
+  complete: true
+  connections:
+    - f11: GATE_OUT_USB
+      net: n06
+    - f12: DRAIN_OUT_USB
+      net: n13
+    - f13: SOURCE_OUT_USB
+      net: n02
+    - f21: GATE_OUT_LIGHTS
+      net: n07
+    - f22: DRAIN_OUT_LIGHTS
+      net: n14
+    - f23: SOURCE_OUT_LIGHTS
+      net: n02
+    - f31: GATE_OUT_HEAT
+      net: n08
+    - f32: DRAIN_OUT_HEAT
+      net: n15
+    - f33: SOURCE_OUT_HEAT
+      net: n02
+    - f41: GATE_OUT_NAV
+      net: n09
+    - f42: DRAIN_OUT_NAV
+      net: n16
+    - f43: SOURCE_OUT_NAV
+      net: n02
+
+indsw:
+  complete: true
+  connections:
+    - i11: GATE_IND_USB
+      net: n19
+    - i12: DRAIN_IND_USB
+      net: n20
+    - i13: SOURCE_IND_USB
+      net: n02
+    - i21: GATE_IND_LIGHTS
+      net: n21
+    - i22: DRAIN_IND_LIGHTS
+      net: n22
+    - i23: SOURCE_IND_LIGHTS
+      net: n02
+    - i31: GATE_IND_HEAT
+      net: n23
+    - i32: DRAIN_IND_HEAT
+      net: n24
+    - i33: SOURCE_IND_HEAT
+      net: n02
+    - i41: GATE_IND_R
+      net: n25
+    - i42: DRAIN_IND_R
+      net: n26
+    - i43: SOURCE_IND_R
+      net: n02
+    - i51: GATE_IND_G
+      net: n27
+    - i52: DRAIN_IND_G
+      net: n28
+    - i53: SOURCE_IND_G
+      net: n02
+    - i61: GATE_IND_B
+      net: n29
+    - i62: DRAIN_IND_B
+      net: n30
+    - i63: SOURCE_IND_B
+      net: n02
+
+hb:
+  complete: true
+  connections:
+    - zener_anode: SENSE
+      net: n17
+    - zener_cathode: OUT_COND
+      net: n18
+    - res_a: PLDN_A
+      net: n18
+    - res_b: PLDN_GND
+      net: n02
+
+ps:
+  - complete: true
+  - connections:
+      - p01: GND
+        net: n02
+      - p02: 12V_IN
+        net: n01
+      - p03: 5V_OUT
+        net: n03
+
+box_networks:
+  - n01:
+      - pwr_harness/12V_IN
+      - ps/12V_IN
+      - thin_harness/12V_OUT_IND
+  - n02:
+      - pwr_harness/GND
+      - ps/GND
+      - pico2w/GND(all)
+      - outsw/SOURCE_OUT_USB
+      - outsw/SOURCE_OUT_LIGHTS
+      - outsw/SOURCE_OUT_HEAT
+      - outsw/SOURCE_OUT_NAV
+      - indsw/SOURCE_IND_USB
+      - indsw/SOURCE_IND_LIGHTS
+      - indsw/SOURCE_IND_HEAT
+      - indsw/SOURCE_IND_R
+      - indsw/SOURCE_IND_G
+      - indsw/SOURCE_IND_B
+      - hb/PLDN_GND
+  - n03:
+      - ps/5V_OUT
+      - pico2w/5V_IN
+  - n04:
+      - pico2w/3V3_OUT
+      - thin_harness/3V3_SW_1W
+  - n05:
+      - pico2w/1W
+      - thin_harness/1W
+  - n06:
+      - pico2w/OUT_USB
+      - outsw/GATE_OUT_USB
+  - n07:
+      - pico2w/OUT_LIGHTS
+      - outsw/GATE_OUT_LIGHTS
+  - n08:
+      - pico2w/OUT_HEAT
+      - outsw/GATE_OUT_HEAT
+  - n09:
+      - pico2w/OUT_NAV
+      - outsw/GATE_OUT_NAV
+  - n10:
+      - pico2w/SW_USB_NAV
+      - thin_harness/SW_USB_NAV
+  - n11:
+      - pico2w/SW_LIGHTS
+      - thin_harness/SW_LIGHTS
+  - n12:
+      - pico2w/SW_HEAT
+      - thin_harness/SW_HEAT
+  - n13:
+      - outsw/DRAIN_OUT_USB
+      - out_harness/RET_USB
+  - n14:
+      - outsw/DRAIN_OUT_LIGHTS
+      - out_harness/RET_LIGHTS
+  - n15:
+      - outsw/DRAIN_OUT_HEAT
+      - out_harness/RET_HEAT
+  - n16:
+      - outsw/DRAIN_OUT_NAV
+      - out_harness/RET_NAV
+  - n17:
+      - hb/SENSE
+      - thin_harness/HB_12V
+  - n18:
+      - pico2w/IN_HB
+      - hb/OUT_COND, hb/PLDN_A
+  - n19:
+      - indsw/GATE_IND_USB
+      - pico2w/IND_USB
+  - n20:
+      - indsw/DRAIN_IND_USB
+      - thin_harness/IND_USB
+  - n21:
+      - indsw/GATE_IND_LIGHTS
+      - pico2w/IND_LIGHTS
+  - n22:
+      - indsw/DRAIN_IND_LIGHTS
+      - thin_harness/IND_LIGHTS
+  - n23:
+      - indsw/GATE_IND_HEAT
+      - pico2w/IND_HEAT
+  - n24:
+      - indsw/DRAIN_IND_HEAT
+      - thin_harness/IND_HEAT
+  - n25:
+      - indsw/GATE_IND_R
+      - pico2w/IND_R
+  - n26:
+      - indsw/DRAIN_IND_R
+      - thin_harness/IND_R
+  - n27:
+      - indsw/GATE_IND_G
+      - pico2w/IND_G
+  - n28:
+      - indsw/DRAIN_IND_G
+      - thin_harness/IND_G
+  - n29:
+      - indsw/GATE_IND_B
+      - pico2w/IND_B
+  - n30:
+      - indsw/DRAIN_IND_B
+      - thin_harness/IND_B

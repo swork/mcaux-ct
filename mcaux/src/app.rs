@@ -121,9 +121,11 @@ pub const TELEMETRY_CHANNEL_DEPTH: usize = 1;
 assign_resources! {
     switching: SwitchingResources {
         led_blinker: PIN_2,
+        /*
         pin_uart_tx: PIN_0,
         pin_uart_rx: PIN_1,
         uart: UART0,
+        */
         sw_usb: PIN_20,
         sw_aux: PIN_21,
         sw_grp: PIN_22,
@@ -142,6 +144,7 @@ assign_resources! {
         out_grp: PIN_18,
         out_nav: PIN_19,
         pwm_outgrp: PWM_SLICE1,
+        _one_wire: PIN_10,
     }
 }
 
