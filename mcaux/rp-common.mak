@@ -51,7 +51,7 @@ b/public/release.bin.sha256: b/public/release.bin
 
 b/public/release.bin.git-status b/public/release.bin.git-describe: b/public/release.bin
 	git status --porcelain > b/public/release.bin.git-status
-  git describe --always --dirty --broken --long > b/public/release.bin.git-describe
+	git describe --always --dirty --broken --long > b/public/release.bin.git-describe
 
 b/public/release.bin.active-addr b/public/release.bin.dfu-addr b/public/release.bin.utility-addr: memory-rp235xa.x
 	mkdir -p b/public
