@@ -1,7 +1,7 @@
 [package]
 edition = "2024"
 name = "mcaux"
-version = "4.4.4"  # major determines DFU
+version = "5.5.5"  # major determines DFU
 authors = ["Steve Work <steve@work.renlabs.com>"]
 license = "MIT OR Apache-2.0"
 publish = false

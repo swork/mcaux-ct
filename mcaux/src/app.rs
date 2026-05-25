@@ -126,19 +126,19 @@ assign_resources! {
         pin_uart_rx: PIN_1,
         uart: UART0,
         */
-        sw_usb: PIN_20,
-        sw_aux: PIN_21,
-        sw_grp: PIN_22,
+        sw_usb: PIN_21, // PIN_20,
+        sw_aux: PIN_22, // PIN_21,
+        sw_grp: PIN_20, // PIN_22,
         sw_hbm: PIN_26,
-        led_usb: PIN_4,
-        led_aux: PIN_5,
-        pwm_usb_aux: PWM_SLICE2,
-        led_grp: PIN_6,
-        led_r: PIN_7,
-        pwm_grp_r: PWM_SLICE3,
-        led_g: PIN_8,
-        led_b: PIN_9,
-        pwm_g_b: PWM_SLICE4,
+        led_ringw: PIN_5, // PIN_4,
+        led_ringb: PIN_6, // PIN_5,
+        led_ringr: PIN_4, // PIN_6,
+        led_rgbr: PIN_7,
+        led_rgbg: PIN_8,
+        led_rgbb: PIN_9,
+        pwm_ringr_ringw: PWM_SLICE2, // pwm_usb_aux: PWM_SLICE2,
+        pwm_ringb_rgbr: PWM_SLICE3,  // pwm_grp_r: PWM_SLICE3,
+        pwm_rgbg_rgbb: PWM_SLICE4,
         out_usb: PIN_16,
         out_aux: PIN_17,
         out_grp: PIN_18,
@@ -180,7 +180,7 @@ pub async fn main_rp(
         .expect("usb switch_state_observer "),
     );
 
-    let (sw_auxlight_i, out_auxlight_i) = switch_controller.add_switch("auxlight", 2, 0); // off/on
+    let (sw_auxlight_i, out_auxlight_i) = switch_controller.add_switch("auxlight", 2, 1); // off/on
     spawner.spawn(
         switch_state_observer(
             switch_controller.switch[sw_auxlight_i],
@@ -253,26 +253,26 @@ pub async fn main_rp(
     // assert_eq!(period, 7812); // MARK_THIS_LINE_FOR_BRIGHTNESS_LOOKUP
     c.divider = FixedU16::<U4>::from_num(divider);
 
-    let pwm = Pwm::new_output_ab(p.pwm_usb_aux, p.led_usb, p.led_aux, c.clone());
-    let (led0, led1) = pwm.split();
-    let led0 = led0.expect("split slice2a");
-    let led1 = led1.expect("split slice2b");
-    let pwm = Pwm::new_output_ab(p.pwm_grp_r, p.led_grp, p.led_r, c.clone());
-    let (led2, led3r) = pwm.split();
-    let led2 = led2.expect("split slice3a");
-    let led3r = led3r.expect("split slice3b");
-    let pwm = Pwm::new_output_ab(p.pwm_g_b, p.led_g, p.led_b, c.clone());
-    let (led3g, led3b) = pwm.split();
-    let led3g = led3g.expect("split slice4a");
-    let led3b = led3b.expect("split slice4b");
+    let pwm = Pwm::new_output_ab(p.pwm_ringr_ringw, p.led_ringr, p.led_ringw, c.clone());
+    let (led_ringr, led_ringw) = pwm.split();
+    let led_ringr = led_ringr.expect("split slice2a");
+    let led_ringw = led_ringw.expect("split slice2b");
+    let pwm = Pwm::new_output_ab(p.pwm_ringb_rgbr, p.led_ringb, p.led_rgbr, c.clone());
+    let (led_ringb, led_rgbr) = pwm.split();
+    let led_ringb = led_ringb.expect("split slice3a");
+    let led_rgbr = led_rgbr.expect("split slice3b");
+    let pwm = Pwm::new_output_ab(p.pwm_rgbg_rgbb, p.led_rgbg, p.led_rgbb, c.clone());
+    let (led_rgbg, led_rgbb) = pwm.split();
+    let led_rgbg = led_rgbg.expect("split slice4a");
+    let led_rgbb = led_rgbb.expect("split slice4b");
 
     let indicators = IndicatorsInstances {
-        usb: led0,
-        auxlight: led1,
-        gripheat: led2,
-        rgb_r: led3r,
-        rgb_g: led3g,
-        rgb_b: led3b,
+        usb: led_ringw,
+        auxlight: led_ringb,
+        gripheat: led_ringr,
+        rgb_r: led_rgbr,
+        rgb_g: led_rgbg,
+        rgb_b: led_rgbb,
     };
 
     let indicator_controller = IndicatorController::new(
