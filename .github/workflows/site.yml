@@ -37,7 +37,7 @@ jobs:
           rustup target add thumbv8m.main-none-eabihf
           rustup target add thumbv6m-none-eabi
           sudo apt-get update
-          sudo apt-get install -y binutils-arm-none-eabi
+          sudo apt-get install -y binutils-arm-none-eabi rhash
           cargo install --target `rustc -vV | sed -nE 's/host: (.*)/\1/p'` --path cargo-utility-section cargo-utility-section
           cd mcaux
           make clean
