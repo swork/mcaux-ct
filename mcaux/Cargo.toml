@@ -16,17 +16,17 @@ aligned = "0.4.3"
 assign-resources = "0.5.0"
 cortex-m = { version = "0.7.7", features = ["inline-asm"] }
 cortex-m-rt = "0.7.5"
-cyw43 = { version = "0.6.0", features = ["defmt", "firmware-logs"], path = "../embassy/cyw43" }
-cyw43-pio = { version = "0.9.0", features = ["defmt"] , path = "../embassy/cyw43-pio" }
+cyw43 = { version = "0.7.0", features = ["defmt", "firmware-logs"], path = "../embassy/cyw43" }
+cyw43-pio = { version = "0.10.0", features = ["defmt"] , path = "../embassy/cyw43-pio" }
 defmt = "1.0.1"
 defmt-rtt = "1.1.0"
-embassy-boot = { version = "0.6.1", features = ["defmt"], path = "../embassy/embassy-boot" }
-embassy-embedded-hal = { version = "0.5.0", path = "../embassy/embassy-embedded-hal" }
-embassy-executor = { version = "0.9.1", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] , path = "../embassy/embassy-executor" }
+embassy-boot = { version = "0.7.0", features = ["defmt"], path = "../embassy/embassy-boot" }
+embassy-embedded-hal = { version = "0.6.0", path = "../embassy/embassy-embedded-hal" }
+embassy-executor = { version = "0.10.0", features = ["platform-cortex-m", "executor-thread", "executor-interrupt", "defmt"] , path = "../embassy/embassy-executor" }
 embassy-futures = { version = "0.1.2", path = "../embassy/embassy-futures" }
-embassy-net = { version = "0.8.0", features = ["proto-ipv4", "tcp", "mdns", "dns", "dhcpv4", "defmt"] , path = "../embassy/embassy-net" }
-embassy-rp = { version = "0.9.0", features = ["defmt", "unstable-pac", "critical-section-impl", "time-driver"] , path = "../embassy/embassy-rp" }
-embassy-sync = { version = "0.7.2", path = "../embassy/embassy-sync" }
+embassy-net = { version = "0.9.1", features = ["proto-ipv4", "tcp", "mdns", "dns", "dhcpv4", "defmt"] , path = "../embassy/embassy-net" }
+embassy-rp = { version = "0.10.0", features = ["defmt", "unstable-pac", "critical-section-impl", "time-driver"] , path = "../embassy/embassy-rp" }
+embassy-sync = { version = "0.8.0", path = "../embassy/embassy-sync" }
 embassy-time = { version = "0.5.0" , path = "../embassy/embassy-time" }
 embedded-io-async = "0.7.0"
 embedded-storage = "0.3.1"
@@ -39,6 +39,7 @@ hex-literal = "1.1.0"
 itoa = "1.0.17"
 mcaux-indicators = { version = "0.1.0", path = "../mcaux-indicators" }
 momentary = { version = "0.1.0", path = "../momentary" }
+portable-atomic = { version = "1.0", features = ["critical-section"] }
 reqwless = { git = "https://github.com/drogue-iot/reqwless", rev = "68f703dfc16e6f7f964b7238c922c0d433118872", features = ["defmt"] } # this is a January update, still labeled 0.14.0, used by embassy examples. Compile troubles with released 0.14.0, as of 1 March 2026.
 sha2 = { version = "0.10.9", default-features = false }
 static_cell = "2.1.1"
