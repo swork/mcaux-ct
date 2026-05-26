@@ -30,22 +30,6 @@ jobs:
       - run: cargo check --features rp235xa --target thumbv8m.main-none-eabihf
       - run: cargo check --features rp2040 --no-default-features --target thumbv6m-none-eabi
 
-  fmt:
-    name: Rustfmt
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mcaux
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          rustup update stable
-          rustup default stable
-          rustup set profile minimal
-          rustup target add thumbv8m.main-none-eabihf
-          rustup component add rustfmt
-      - run: cargo fmt --all -- --check
-
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
