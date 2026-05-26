@@ -1,12 +1,12 @@
 FEATURES := $(CHIP)
 BLOBS := --blob "1,../embassy/cyw43-firmware/43439A0.bin,2" --blob "2,../embassy/cyw43-firmware/43439A0_clm.bin,2" --blob "3,../embassy/cyw43-firmware/nvram_rp2040.bin,2"
-V := "`cat b/public/release.bin.version`"
+V = $(shell cat b/public/release.bin.version)
 
 .PHONY: tarballz
 
 tarballz: b/archive/mcaux_latest_$(BOARD).tar.gz b/archive/mcaux_$(V)_$(BOARD).tar.gz
 
-b/archive/mcaux_latest_$(BOARD).tar.gz b/archive/mcaux_$(V)_$(BOARD).tar.gz: \
+b/archive/mcaux_%_$(BOARD).tar.gz: \
 		b/private/utility.ihex \
 		b/public/release.elf \
 		b/public/release.bin \
@@ -20,8 +20,7 @@ b/archive/mcaux_latest_$(BOARD).tar.gz b/archive/mcaux_$(V)_$(BOARD).tar.gz: \
 		b/public/release.bin.git-describe \
 		b/public/release.bin.git-status
 	mkdir -p b/archive
-	mkdir -p b/tar/mcaux/$(BOARD)/latest && cp b/public/* b/tar/mcaux/$(BOARD)/latest && tar -C b/tar -czf b/archive/mcaux_latest_$(BOARD).tar.gz . && rm -rf b/tar
-	-mkdir -p b/tar/mcaux/$(BOARD)/$(V) && cp b/public/* b/tar/mcaux/$(BOARD)/$(V) && tar -C b/tar -czf b/archive/mcaux_$(V)_$(BOARD).tar.gz . && rm -rf b/tar
+	mkdir -p b/tar/mcaux/$(BOARD)/$* && cp b/public/* b/tar/mcaux/$(BOARD)/$* && tar -C b/tar -czf b/archive/mcaux_$*_$(BOARD).tar.gz . && rm -rf b/tar
 
 # release.elf and stem.elf build ONCE ONLY: do "make clean && make" to guarantee freshness
 b/public/release.elf:
