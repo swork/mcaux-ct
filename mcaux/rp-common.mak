@@ -1,6 +1,6 @@
 FEATURES := $(CHIP)
 BLOBS := --blob "1,../embassy/cyw43-firmware/43439A0.bin,2" --blob "2,../embassy/cyw43-firmware/43439A0_clm.bin,2" --blob "3,../embassy/cyw43-firmware/nvram_rp2040.bin,2"
-V = "`cat b/public/release.bin.version`"
+V := "`cat b/public/release.bin.version`"
 
 .PHONY: tarballz
 

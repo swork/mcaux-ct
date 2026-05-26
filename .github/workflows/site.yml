@@ -40,7 +40,6 @@ jobs:
           sudo apt-get install -y binutils-arm-none-eabi rhash
           cargo install --target `rustc -vV | sed -nE 's/host: (.*)/\1/p'` --path cargo-utility-section cargo-utility-section
           cd mcaux
-          make clean
           DFU0=https://swork.github.io/mcaux-ct/DFU/ AP0=SSID PW0=password make tarballz
           mkdir -p _site/DFU
           cp b/archive/*.tar.gz _site/DFU
