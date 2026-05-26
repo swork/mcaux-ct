@@ -1,4 +1,65 @@
-//! LPI2C controller driver
+//! # LPI2C Controller Driver
+//!
+//! This module provides a driver for the Low-Power Inter-Integrated
+//! Circuit (LPI2C) controller, supporting blocking,
+//! interrupt-only async, and DMA async modes of operation.
+//!
+//! The driver support all transfer speeds except for Fast Mode+.
+//!
+//! ## Features
+//!
+//! - **Blocking and Asynchronous Modes**: Supports both blocking and
+//! async APIs for flexibility in different runtime environments.
+//! - **DMA Support**: Enables high-performance data transfers using
+//! DMA.
+//! - **Configurable Bus Speeds**: Supports standard (100 kHz), fast
+//! (400 kHz), and fast-plus (1 MHz) modes. Ultra-fast (3.4 MHz) mode
+//! is not yet implemented.
+//! - **Error Handling**: Comprehensive error reporting, including
+//! FIFO errors, arbitration loss, and address NACK conditions.
+//! - **Embedded HAL Compatibility**: Implements traits from
+//! `embedded-hal` and `embedded-hal-async` for interoperability with
+//! other libraries.
+//!
+//! ### Error Types
+//!
+//! - `SetupError`: Errors related to hardware initialization, such as
+//! clock configuration issues.
+//! - `IOError`: Errors during I2C operations, including FIFO errors,
+//! arbitration loss, and invalid buffer lengths.
+//!
+//! ## Example
+//!
+//! ```rust,no_run
+//! #![no_std]
+//! #![no_main]
+//!
+//! # extern crate panic_halt;
+//! # extern crate embassy_mcxa;
+//! # extern crate embassy_executor;
+//! # use panic_halt as _;
+//! use embassy_executor::Spawner;
+//! use embassy_mcxa::clocks::config::Div8;
+//! use embassy_mcxa::config::Config;
+//! use embassy_mcxa::i2c::controller::{self, I2c, Speed};
+//!
+//! #[embassy_executor::main]
+//! async fn main(_spawner: Spawner) {
+//!     let mut config = Config::default();
+//!     config.clock_cfg.sirc.fro_lf_div = Div8::from_divisor(1);
+//!
+//!     let p = embassy_mcxa::init(config);
+//!
+//!     let mut i2c = I2c::new_blocking(p.LPI2C2, p.P1_9, p.P1_8, Default::default()).unwrap();
+//!
+//!     // Write data
+//!     i2c.blocking_write(0x50, &[0x01, 0x02, 0x03]).unwrap();
+//!
+//!     // Read data
+//!     let mut buffer = [0u8; 3];
+//!     i2c.blocking_read(0x50, &mut buffer).unwrap();
+//! }
+//! ```
 
 use core::future::Future;
 use core::marker::PhantomData;
@@ -9,11 +70,11 @@ use embassy_hal_internal::drop::OnDrop;
 use super::{Async, AsyncMode, Blocking, Dma, Info, Instance, Mode, SclPin, SdaPin};
 use crate::clocks::periph_helpers::{Div4, Lpi2cClockSel, Lpi2cConfig};
 use crate::clocks::{ClockError, PoweredClock, WakeGuard, enable_and_reset};
-use crate::dma::{Channel, DMA_MAX_TRANSFER_SIZE, DmaChannel, EnableInterrupt};
+use crate::dma::{Channel, DMA_MAX_TRANSFER_SIZE, DmaChannel, TransferOptions};
 use crate::gpio::{AnyPin, SealedPin};
 use crate::interrupt;
 use crate::interrupt::typelevel::Interrupt;
-use crate::pac::lpi2c::vals::{Alf, Cmd, Dmf, Dozen, Epf, McrRrf, McrRtf, MsrFef, MsrSdf, Ndf, Pltf, Stf};
+use crate::pac::lpi2c::{Alf, Cmd, Dmf, Dozen, Epf, McrRrf, McrRtf, Msr, MsrFef, MsrSdf, Ndf, Pltf, Prescale, Stf};
 
 /// Errors exclusive to HW initialization
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -31,7 +92,10 @@ pub enum SetupError {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
 pub enum IOError {
-    /// FIFO Error
+    /// FIFO Error, the command in the FIFO queue expected the controller to be in a STARTed state, but it was not.
+    ///
+    /// Even though a START could have been issued earlier, the controller might now be in a different state.
+    /// For example, a NAK condition was detected and the controller automatically issued a STOP.
     FifoError,
     /// Reading for I2C failed.
     ReadFail,
@@ -49,6 +113,12 @@ pub enum IOError {
     InvalidReadBufferLength,
     /// Other internal errors or unexpected state.
     Other,
+}
+
+impl From<crate::dma::InvalidParameters> for IOError {
+    fn from(_value: crate::dma::InvalidParameters) -> Self {
+        IOError::Other
+    }
 }
 
 /// I2C interrupt handler.
@@ -105,18 +175,83 @@ impl From<Speed> for u32 {
     }
 }
 
-impl From<Speed> for (u8, u8, u8, u8) {
-    fn from(value: Speed) -> (u8, u8, u8, u8) {
-        match value {
-            Speed::Standard => (0x3d, 0x37, 0x3b, 0x1d),
-            Speed::Fast => (0x0e, 0x0c, 0x0d, 0x06),
-            Speed::FastPlus => (0x04, 0x03, 0x03, 0x02),
+/// Compute LPI2C controller MCFGR1.PRESCALE + MCCR0 fields from peripheral
+/// input frequency and target SCL frequency.
+///
+/// Mirrors the NXP SDK `LPI2C_MasterSetBaudRate` algorithm
+/// (see `fsl_lpi2c.c`). For each prescaler 0..=7, computes the period
+/// in periph cycles using round-to-nearest division, picks the one with
+/// the smallest absolute error to the target. Then derives:
+///   - CLKHI = (clkCycle - SCL_LATENCY) / 2, clamped down so that
+///     tBUF >= 0.52/baud.
+///   - CLKLO = clkCycle - CLKHI.
+///   - SETHOLD = clk_bdr/divider/2 - 1   (~half SCL period).
+///   - DATAVD  = clk_bdr/divider/4 - 1   (~quarter SCL period).
+///
+/// Where SCL_LATENCY = (2 + FILTSCL) / 2^prescale and we assume FILTSCL=0
+/// (we do not program MCFGR2 in this driver).
+fn compute_baud_params(src_hz: u32, baud_hz: u32) -> (Prescale, u8, u8, u8, u8) {
+    let filt_scl: u32 = 0;
 
-            // UltraFast is "special". Leaving it unimplemented until
-            // the driver and the clock API is further stabilized.
-            Speed::UltraFast => todo!(),
-        }
+    let prescalers = [
+        Prescale::DivideBy1,
+        Prescale::DivideBy2,
+        Prescale::DivideBy4,
+        Prescale::DivideBy8,
+        Prescale::DivideBy16,
+        Prescale::DivideBy32,
+        Prescale::DivideBy64,
+        Prescale::DivideBy128,
+    ];
+
+    let (best_prescale, best_div, best_clk_cycle, _) = prescalers.iter().fold(
+        (Prescale::DivideBy1, 1u32, 0u32, u32::MAX),
+        |best @ (_, _, _, best_err), &prescale| {
+            let divider: u32 = 1u32 << (prescale as u8);
+            let scl_lat = (2 + filt_scl) / divider;
+
+            // a = round(src / divider / baud)
+            let a = (10 * src_hz / divider / baud_hz + 5) / 10;
+            let b = scl_lat + 2;
+            if a <= b {
+                return best;
+            }
+            let clk_cycle = a - b;
+            if clk_cycle > 120u32.saturating_sub(scl_lat) {
+                return best;
+            }
+
+            let computed = (src_hz / divider) / (clk_cycle + 2 + scl_lat);
+            let abs_err = computed.abs_diff(baud_hz);
+            if abs_err < best_err {
+                (prescale, divider, clk_cycle, abs_err)
+            } else {
+                best
+            }
+        },
+    );
+
+    let scl_lat = (2 + filt_scl) / best_div;
+    let mut tmp_high = best_clk_cycle.saturating_sub(scl_lat) / 2;
+
+    // Clamp tmp_high so tBUF >= 0.52 * SCL period:
+    //   CLKHI <= clkCycle - 0.52*src/baud/divider + 1
+    let a_tbuf = 13 * src_hz / baud_hz / best_div / 25;
+    let max_high = best_clk_cycle.saturating_sub(a_tbuf).saturating_add(1);
+    if tmp_high > max_high {
+        tmp_high = max_high;
     }
+
+    let clk_bdr = src_hz / baud_hz;
+    let tmp_hold = (clk_bdr / best_div / 2).saturating_sub(1);
+    let tmp_datavd = (clk_bdr / best_div / 4).saturating_sub(1);
+
+    let clkhi = (tmp_high & 0x3F) as u8;
+    let clklo = ((best_clk_cycle - tmp_high) & 0x3F) as u8;
+    let sethold = (tmp_hold & 0x3F) as u8;
+    let datavd = (tmp_datavd & 0xFF) as u8;
+
+    (best_prescale, clklo, clkhi, sethold, datavd)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -166,13 +301,42 @@ pub struct I2c<'d, M: Mode> {
     _sda: Peri<'d, AnyPin>,
     mode: M,
     is_hs: bool,
+    /// Peripheral input clock frequency in Hz, captured at construction.
+    /// Used to compute MCCR0 timing parameters (e.g. when [`set_config`]
+    /// changes the bus speed).
+    freq: u32,
     _wg: Option<WakeGuard>,
 }
 
 impl<'d> I2c<'d, Blocking> {
-    /// Create a new blocking instance of the I2C Controller bus driver.
+    /// Creates a new blocking instance of the I2C Controller bus driver.
     ///
-    /// Any external pin will be placed into Disabled state upon Drop.
+    /// This method initializes the I2C controller in blocking mode, allowing
+    /// synchronous read and write operations.  The I2C bus is configured based
+    /// on the provided `Config` structure, which specifies parameters such as
+    /// bus speed and clock settings.
+    ///
+    /// # Arguments
+    ///
+    /// - `peri`: The peripheral instance representing the I2C controller hardware.
+    /// - `scl`: The pin to be used for the I2C clock line (SCL).
+    /// - `sda`: The pin to be used for the I2C data line (SDA).
+    /// - `config`: A `Config` structure specifying the desired I2C configuration, including bus speed and clock settings.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(Self)`: A new instance of the I2C driver in blocking mode if initialization is successful.
+    /// - `Err(SetupError)`: An error if the initialization fails, such as due to invalid clock configuration.
+    ///
+    /// # Behavior
+    ///
+    /// - The I2C controller is configured and enabled based on the provided `Config`.
+    /// - Any external pins used for SCL and SDA will be placed into a disabled state when the driver instance is dropped.
+    ///
+    /// # Errors
+    ///
+    /// - `SetupError::ClockSetup`: If there is an issue with the clock configuration.
+    /// - `SetupError::Other`: For other unexpected initialization errors.
     pub fn new_blocking<T: Instance>(
         peri: Peri<'d, T>,
         scl: Peri<'d, impl SclPin<T>>,
@@ -215,6 +379,7 @@ impl<'d, M: Mode> I2c<'d, M> {
             _sda,
             mode,
             is_hs: config.speed == Speed::UltraFast,
+            freq: parts.freq,
             _wg: parts.wake_guard,
         };
 
@@ -237,57 +402,74 @@ impl<'d, M: Mode> I2c<'d, M> {
             self.info.regs().mcr().modify(|w| w.set_rst(false));
 
             self.info.regs().mcr().modify(|w| {
-                w.set_dozen(Dozen::ENABLED);
+                w.set_dozen(Dozen::Enabled);
                 w.set_dbgen(false);
             });
         });
 
-        let (clklo, clkhi, sethold, datavd) = config.speed.into();
+        let target_hz: u32 = config.speed.into();
+        // UltraFast (HS) mode requires programming MCCR1 and special start
+        // commands beyond what this driver currently supports. Leave it
+        // explicitly unimplemented until the HS path is wired up end-to-end.
+        if config.speed == Speed::UltraFast {
+            todo!("LPI2C UltraFast (HS) mode is not yet supported");
+        }
+        let (prescale, clklo, clkhi, sethold, datavd) = compute_baud_params(self.freq, target_hz);
 
         critical_section::with(|_| {
+            self.info.regs().mcfgr1().modify(|w| w.set_prescale(prescale));
             self.info.regs().mccr0().modify(|w| {
                 w.set_clklo(clklo);
                 w.set_clkhi(clkhi);
                 w.set_sethold(sethold);
                 w.set_datavd(datavd);
-            })
-        });
+            });
 
-        // Enable the controller.
-        critical_section::with(|_| self.info.regs().mcr().modify(|w| w.set_men(true)));
+            // Enable the controller.
+            self.info.regs().mcr().modify(|w| w.set_men(true));
+        });
 
         // Clear all flags
         self.info.regs().msr().write(|w| {
-            w.set_epf(Epf::INT_YES);
-            w.set_sdf(MsrSdf::INT_YES);
-            w.set_ndf(Ndf::INT_YES);
-            w.set_alf(Alf::INT_YES);
-            w.set_fef(MsrFef::INT_YES);
-            w.set_pltf(Pltf::INT_YES);
-            w.set_dmf(Dmf::INT_YES);
-            w.set_stf(Stf::INT_YES);
+            w.set_epf(Epf::IntYes);
+            w.set_sdf(MsrSdf::IntYes);
+            w.set_ndf(Ndf::IntYes);
+            w.set_alf(Alf::IntYes);
+            w.set_fef(MsrFef::IntYes);
+            w.set_pltf(Pltf::IntYes);
+            w.set_dmf(Dmf::IntYes);
+            w.set_stf(Stf::IntYes);
         });
     }
 
     fn remediation(&self) {
         #[cfg(feature = "defmt")]
-        defmt::trace!("Future dropped, issuing stop",);
+        defmt::trace!("Future dropped, recovering controller",);
 
-        // if the FIFO is not empty, drop its contents.
-        if !self.is_tx_fifo_empty() {
-            self.reset_fifos();
-        }
-
-        // send a stop command
+        // Send a STOP. After an address NACK with empty TX FIFO and
+        // autostop disabled, this releases the bus.
+        //
+        // Important: `stop()` busy-waits on `is_tx_fifo_empty_or_error`,
+        // which returns true on *any* error (e.g., FEF raised because
+        // the master was already in idle when STOP was queued). In
+        // that case the STOP command may still be sitting in the TX
+        // FIFO, ready to confuse the next transaction. Always reset
+        // the FIFOs after the STOP attempt to guarantee a clean slate.
         let _ = self.stop();
+        self.reset_fifos();
+
+        // Clear any residual MSR flags raised by the recovery STOP
+        // (FEF in particular) so the next transaction starts clean.
+        let msr = self.info.regs().msr().read();
+        self.info.regs().msr().write(|w| *w = msr);
     }
 
     /// Resets both TX and RX FIFOs dropping their contents.
     fn reset_fifos(&self) {
         critical_section::with(|_| {
             self.info.regs().mcr().modify(|w| {
-                w.set_rtf(McrRtf::RESET);
-                w.set_rrf(McrRrf::RESET);
+                w.set_rtf(McrRtf::Reset);
+                w.set_rrf(McrRrf::Reset);
             });
         });
     }
@@ -303,27 +485,41 @@ impl<'d, M: Mode> I2c<'d, M> {
         self.info.regs().mfsr().read().txcount() == 0
     }
 
+    /// Checks whether the TX FIFO or if there is an error condition active.
+    fn is_tx_fifo_empty_or_error(&self) -> bool {
+        self.is_tx_fifo_empty() || self.status().is_err()
+    }
+
     /// Checks whether the RX FIFO is empty.
     fn is_rx_fifo_empty(&self) -> bool {
         self.info.regs().mfsr().read().rxcount() == 0
     }
 
-    /// Reads and parses the controller status producing an
+    /// Parses the controller status producing an
     /// appropriate `Result<(), Error>` variant.
-    fn status(&self) -> Result<(), IOError> {
-        let msr = self.info.regs().msr().read();
-        self.info.regs().msr().write(|w| {
-            w.set_epf(Epf::INT_YES);
-            w.set_sdf(MsrSdf::INT_YES);
-            w.set_ndf(Ndf::INT_YES);
-            w.set_alf(Alf::INT_YES);
-            w.set_fef(MsrFef::INT_YES);
-            w.set_pltf(Pltf::INT_YES);
-            w.set_dmf(Dmf::INT_YES);
-            w.set_stf(Stf::INT_YES);
-        });
+    fn parse_status(&self, msr: &Msr) -> Result<(), IOError> {
+        if msr.ndf() == Ndf::IntYes {
+            Err(IOError::AddressNack)
+        } else if msr.alf() == Alf::IntYes {
+            Err(IOError::ArbitrationLoss)
+        } else if msr.fef() == MsrFef::IntYes {
+            Err(IOError::FifoError)
+        } else {
+            Ok(())
+        }
+    }
 
-        if msr.ndf() == Ndf::INT_YES {
+    /// Reads, parses and clears the controller status producing an
+    /// appropriate `Result<(), Error>` variant.
+    ///
+    /// Will also send a STOP command if the tx_fifo is empty.
+    fn status_and_act(&self) -> Result<(), IOError> {
+        let msr = self.info.regs().msr().read();
+        self.info.regs().msr().write(|w| *w = msr);
+
+        let status = self.parse_status(&msr);
+
+        if let Err(IOError::AddressNack) = status {
             // According to the Reference Manual, section 40.7.1.5
             // Controller Status (MSR), the controller will
             // automatically send a STOP condition if
@@ -335,14 +531,15 @@ impl<'d, M: Mode> I2c<'d, M> {
             if !self.info.regs().mcfgr1().read().autostop() && self.is_tx_fifo_empty() {
                 self.remediation();
             }
-            Err(IOError::AddressNack)
-        } else if msr.alf() == Alf::INT_YES {
-            Err(IOError::ArbitrationLoss)
-        } else if msr.fef() == MsrFef::INT_YES {
-            Err(IOError::FifoError)
-        } else {
-            Ok(())
         }
+
+        status
+    }
+
+    /// Reads and parses the controller status producing an
+    /// appropriate `Result<(), Error>` variant.
+    fn status(&self) -> Result<(), IOError> {
+        self.parse_status(&self.info.regs().msr().read())
     }
 
     /// Inserts the given command into the outgoing FIFO.
@@ -383,10 +580,10 @@ impl<'d, M: Mode> I2c<'d, M> {
         self.send_cmd(if self.is_hs { Cmd::START_HS } else { Cmd::START }, addr_rw);
 
         // Wait for TxFIFO to be drained
-        while !self.is_tx_fifo_empty() {}
+        while !self.is_tx_fifo_empty_or_error() {}
 
         // Check controller status
-        self.status()
+        self.status_and_act()
     }
 
     /// Prepares a Stop condition on the bus.
@@ -402,9 +599,9 @@ impl<'d, M: Mode> I2c<'d, M> {
         self.send_cmd(Cmd::STOP, 0);
 
         // Wait for TxFIFO to be drained
-        while !self.is_tx_fifo_empty() {}
+        while !self.is_tx_fifo_empty_or_error() {}
 
-        self.status()
+        self.status_and_act()
     }
 
     fn blocking_read_internal(&self, address: u8, read: &mut [u8], send_stop: SendStop) -> Result<(), IOError> {
@@ -473,17 +670,82 @@ impl<'d, M: Mode> I2c<'d, M> {
 
     // Public API: Blocking
 
-    /// Read from address into buffer blocking caller until done.
+    /// Reads data from the specified I2C address into the provided buffer.
+    ///
+    /// This method blocks the caller until the operation is complete.
+    ///
+    /// # Arguments
+    ///
+    /// - `address`: The 7-bit I2C address of the target device.
+    /// - `read`: A mutable buffer to store the data read from the device.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(())` if the read operation is successful.
+    /// - `Err(IOError)` if an error occurs during the operation, such as an address NACK or FIFO error.
+    ///
+    /// # Errors
+    ///
+    /// - `IOError::AddressNack`: If the device does not acknowledge the address.
+    /// - `IOError::FifoError`: If there is an issue with the FIFO queue.
+    /// - Other variants of `IOError` for specific I2C errors.
+    ///
+    /// # Notes
+    ///
+    /// The driver will attempt to fill the buffer with data. If the
+    /// buffer length exceeds the maximum transfer size of the
+    /// controller, the read operation will be performed in multiple
+    /// chunks. This will be transparent to the caller.
     pub fn blocking_read(&mut self, address: u8, read: &mut [u8]) -> Result<(), IOError> {
         self.blocking_read_internal(address, read, SendStop::Yes)
     }
 
-    /// Write to address from buffer blocking caller until done.
+    /// Writes data to the specified I2C address from the provided buffer.
+    ///
+    /// This method blocks the caller until the operation is complete.
+    ///
+    /// # Arguments
+    ///
+    /// - `address`: The 7-bit I2C address of the target device.
+    /// - `write`: A buffer containing the data to be written to the device.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(())` if the write operation is successful.
+    /// - `Err(IOError)` if an error occurs during the operation, such as an address NACK or FIFO error.
+    ///
+    /// # Errors
+    ///
+    /// - `IOError::AddressNack`: If the device does not acknowledge the address.
+    /// - `IOError::FifoError`: If there is an issue with the FIFO queue.
+    /// - Other variants of `IOError` for specific I2C errors.
     pub fn blocking_write(&mut self, address: u8, write: &[u8]) -> Result<(), IOError> {
         self.blocking_write_internal(address, write, SendStop::Yes)
     }
 
-    /// Write to address from bytes and read from address into buffer blocking caller until done.
+    /// Performs a combined write and read operation on the specified I2C
+    /// address.
+    ///
+    /// This method first writes data to the device, then reads data from the
+    /// device into the provided buffer.  The caller is blocked until the
+    /// operation is complete.
+    ///
+    /// # Arguments
+    ///
+    /// - `address`: The 7-bit I2C address of the target device.
+    /// - `write`: A buffer containing the data to be written to the device.
+    /// - `read`: A mutable buffer to store the data read from the device.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(())` if the write-read operation is successful.
+    /// - `Err(IOError)` if an error occurs during the operation, such as an address NACK or FIFO error.
+    ///
+    /// # Errors
+    ///
+    /// - `IOError::AddressNack`: If the device does not acknowledge the address.
+    /// - `IOError::FifoError`: If there is an issue with the FIFO queue.
+    /// - Other variants of `IOError` for specific I2C errors.
     pub fn blocking_write_read(&mut self, address: u8, write: &[u8], read: &mut [u8]) -> Result<(), IOError> {
         self.blocking_write_internal(address, write, SendStop::No)?;
         self.blocking_read_internal(address, read, SendStop::Yes)
@@ -515,6 +777,9 @@ where
         });
     }
 
+    /// Schedule sending a START command and await it being pulled from the FIFO.
+    ///
+    /// Does not indicate that the command was responded to.
     async fn async_start(&self, address: u8, read: bool) -> Result<(), IOError> {
         if address >= 0x80 {
             return Err(IOError::AddressOutOfRange(address));
@@ -530,12 +795,14 @@ where
                 // enable interrupts
                 self.enable_tx_ints();
                 // if the command FIFO is empty, we're done sending start
-                self.is_tx_fifo_empty()
+                self.is_tx_fifo_empty_or_error()
             })
             .await
             .map_err(|_| IOError::Other)?;
 
-        self.status()
+        // Note: the START + ACK/NACK have not necessarily been finished here.
+        // thus this might return Ok(()), but might at a later state result in NAK or FifoError.
+        self.status_and_act()
     }
 
     async fn async_stop(&self) -> Result<(), IOError> {
@@ -548,17 +815,36 @@ where
                 // enable interrupts
                 self.enable_tx_ints();
                 // if the command FIFO is empty, we're done sending stop
-                self.is_tx_fifo_empty()
+                self.is_tx_fifo_empty_or_error()
             })
             .await
             .map_err(|_| IOError::Other)?;
 
-        self.status()
+        self.status_and_act()
     }
 
     // Public API: Async
 
-    /// Read from address into buffer asynchronously.
+    /// Reads data from the specified I2C address into the provided buffer asynchronously.
+    ///
+    /// This method performs the read operation without blocking the caller,
+    /// returning a `Future` that resolves when the operation is complete.
+    ///
+    /// # Arguments
+    ///
+    /// - `address`: The 7-bit I2C address of the target device.
+    /// - `read`: A mutable buffer to store the data read from the device.
+    ///
+    /// # Returns
+    ///
+    /// - A `Future` that resolves to `Ok(())` if the read operation is successful.
+    /// - Resolves to `Err(IOError)` if an error occurs during the operation, such as an address NACK or FIFO error.
+    ///
+    /// # Errors
+    ///
+    /// - `IOError::AddressNack`: If the device does not acknowledge the address.
+    /// - `IOError::FifoError`: If there is an issue with the FIFO queue.
+    /// - Other variants of `IOError` for specific I2C errors.
     pub fn async_read<'a>(
         &'a mut self,
         address: u8,
@@ -567,7 +853,25 @@ where
         <Self as AsyncEngine>::async_read_internal(self, address, read, SendStop::Yes)
     }
 
-    /// Write to address from
+    /// Writes data to the specified I2C address from the provided buffer asynchronously.
+    ///
+    /// This method performs the write operation without blocking the caller, returning a `Future` that resolves when the operation is complete.
+    ///
+    /// # Arguments
+    ///
+    /// - `address`: The 7-bit I2C address of the target device.
+    /// - `write`: A buffer containing the data to be written to the device.
+    ///
+    /// # Returns
+    ///
+    /// - A `Future` that resolves to `Ok(())` if the write operation is successful.
+    /// - Resolves to `Err(IOError)` if an error occurs during the operation, such as an address NACK or FIFO error.
+    ///
+    /// # Errors
+    ///
+    /// - `IOError::AddressNack`: If the device does not acknowledge the address.
+    /// - `IOError::FifoError`: If there is an issue with the FIFO queue.
+    /// - Other variants of `IOError` for specific I2C errors.
     pub fn async_write<'a>(
         &'a mut self,
         address: u8,
@@ -576,7 +880,29 @@ where
         <Self as AsyncEngine>::async_write_internal(self, address, write, SendStop::Yes)
     }
 
-    /// Write to address from bytes and read from address into buffer asynchronously.
+    /// Performs a combined write and read operation on the specified I2C
+    /// address asynchronously.
+    ///
+    /// This method first writes data to the device, then reads data from the
+    /// device into the provided buffer. The operation is performed without
+    /// blocking the caller.
+    ///
+    /// # Arguments
+    ///
+    /// - `address`: The 7-bit I2C address of the target device.
+    /// - `write`: A buffer containing the data to be written to the device.
+    /// - `read`: A mutable buffer to store the data read from the device.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(())` if the write-read operation is successful.
+    /// - `Err(IOError)` if an error occurs during the operation, such as an address NACK or FIFO error.
+    ///
+    /// # Errors
+    ///
+    /// - `IOError::AddressNack`: If the device does not acknowledge the address.
+    /// - `IOError::FifoError`: If there is an issue with the FIFO queue.
+    /// - Other variants of `IOError` for specific I2C errors.
     pub async fn async_write_read<'a>(
         &'a mut self,
         address: u8,
@@ -605,9 +931,37 @@ trait AsyncEngine {
 }
 
 impl<'d> I2c<'d, Async> {
-    /// Create a new async instance of the I2C Controller bus driver.
+    /// Creates a new interrupt-only asynchronous instance of the I2C Controller
+    /// bus driver.
     ///
-    /// Any external pin will be placed into Disabled state upon Drop.
+    /// This method initializes the I2C controller in asynchronous mode,
+    /// enabling non-blocking operations using futures.  The I2C bus is
+    /// configured based on the provided `Config` structure, which specifies
+    /// parameters such as bus speed and clock settings.
+    ///
+    /// # Arguments
+    ///
+    /// - `peri`: The peripheral instance representing the I2C controller hardware.
+    /// - `scl`: The pin to be used for the I2C clock line (SCL).
+    /// - `sda`: The pin to be used for the I2C data line (SDA).
+    /// - `_irq`: The interrupt binding for the I2C controller, ensuring that an interrupt handler is registered.
+    /// - `config`: A `Config` structure specifying the desired I2C configuration, including bus speed and clock settings.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(Self)`: A new instance of the I2C driver in asynchronous mode if initialization is successful.
+    /// - `Err(SetupError)`: An error if the initialization fails, such as due to invalid clock configuration.
+    ///
+    /// # Behavior
+    ///
+    /// - The I2C controller is configured and enabled based on the provided `Config`.
+    /// - The interrupt for the I2C controller is enabled to support asynchronous operations.
+    /// - Any external pins used for SCL and SDA will be placed into a disabled state when the driver instance is dropped.
+    ///
+    /// # Errors
+    ///
+    /// - `SetupError::ClockSetup`: If there is an issue with the clock configuration.
+    /// - `SetupError::Other`: For other unexpected initialization errors.
     pub fn new_async<T: Instance>(
         peri: Peri<'d, T>,
         scl: Peri<'d, impl SclPin<T>>,
@@ -630,11 +984,18 @@ impl<'d> AsyncEngine for I2c<'d, Async> {
             return Err(IOError::InvalidReadBufferLength);
         }
 
-        // perform corrective action if the future is dropped
-        let on_drop = OnDrop::new(|| self.remediation());
-
         for chunk in read.chunks_mut(256) {
             self.async_start(address, true).await?;
+
+            // perform corrective action if the future is dropped or an
+            // error happens between here and the end of the read.
+            //
+            // NOTE: this *must* be set up *after* async_start. async_start
+            // already runs `status_and_act`, which on NACK performs its
+            // own remediation; if we set OnDrop earlier, the early `?`
+            // return would invoke remediation a second time and corrupt
+            // the controller state for the next transaction.
+            let on_drop = OnDrop::new(|| self.remediation());
 
             // send receive command
             self.send_cmd(Cmd::RECEIVE, (chunk.len() - 1) as u8);
@@ -645,7 +1006,7 @@ impl<'d> AsyncEngine for I2c<'d, Async> {
                     // enable interrupts
                     self.enable_tx_ints();
                     // if the command FIFO is empty, we're done sending start
-                    self.is_tx_fifo_empty()
+                    self.is_tx_fifo_empty_or_error()
                 })
                 .await
                 .map_err(|_| IOError::Other)?;
@@ -664,14 +1025,14 @@ impl<'d> AsyncEngine for I2c<'d, Async> {
 
                 *byte = self.info.regs().mrdr().read().data();
             }
+
+            // defuse it; we'll re-arm on the next chunk if any.
+            on_drop.defuse();
         }
 
         if send_stop == SendStop::Yes {
             self.async_stop().await?;
         }
-
-        // defuse it if the future is not dropped
-        on_drop.defuse();
 
         Ok(())
     }
@@ -702,18 +1063,21 @@ impl<'d> AsyncEngine for I2c<'d, Async> {
         }
 
         for byte in write {
+            // initiate transmit
+            self.send_cmd(Cmd::TRANSMIT, *byte);
+
             self.info
                 .wait_cell()
                 .wait_for(|| {
                     // enable interrupts
                     self.enable_tx_ints();
-                    // initiate transmit
-                    self.send_cmd(Cmd::TRANSMIT, *byte);
                     // if the tx FIFO is empty, we're done transmiting
-                    self.is_tx_fifo_empty()
+                    self.is_tx_fifo_empty_or_error()
                 })
                 .await
                 .map_err(|_| IOError::WriteFail)?;
+
+            self.status_and_act()?;
         }
 
         if send_stop == SendStop::Yes {
@@ -728,10 +1092,40 @@ impl<'d> AsyncEngine for I2c<'d, Async> {
 }
 
 impl<'d> I2c<'d, Dma<'d>> {
-    /// Create a new async instance of the I2C Controller bus driver with DMA support.
+    /// Creates a new asynchronous instance of the I2C Controller bus driver with DMA support.
     ///
-    /// Any external pin will be placed into Disabled state upon Drop,
-    /// additionally, the DMA channel is disabled.
+    /// This method initializes the I2C controller in asynchronous mode with
+    /// Direct Memory Access (DMA) support, enabling efficient non-blocking
+    /// operations for large data transfers.  The I2C bus is configured based on
+    /// the provided `Config` structure, which specifies parameters such as bus
+    /// speed and clock settings.
+    ///
+    /// # Arguments
+    ///
+    /// - `peri`: The peripheral instance representing the I2C controller hardware.
+    /// - `scl`: The pin to be used for the I2C clock line (SCL).
+    /// - `sda`: The pin to be used for the I2C data line (SDA).
+    /// - `tx_dma`: The DMA channel to be used for transmitting data.
+    /// - `rx_dma`: The DMA channel to be used for receiving data.
+    /// - `_irq`: The interrupt binding for the I2C controller, ensuring that an interrupt handler is registered.
+    /// - `config`: A `Config` structure specifying the desired I2C configuration, including bus speed and clock settings.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(Self)`: A new instance of the I2C driver in asynchronous mode with DMA support if initialization is successful.
+    /// - `Err(SetupError)`: An error if the initialization fails, such as due to invalid clock configuration.
+    ///
+    /// # Behavior
+    ///
+    /// - The I2C controller is configured and enabled based on the provided `Config`.
+    /// - The interrupt for the I2C controller is enabled to support asynchronous operations.
+    /// - The specified DMA channels are initialized and their interrupts are enabled.
+    /// - Any external pins used for SCL and SDA will be placed into a disabled state when the driver instance is dropped.
+    ///
+    /// # Errors
+    ///
+    /// - `SetupError::ClockSetup`: If there is an issue with the clock configuration.
+    /// - `SetupError::Other`: For other unexpected initialization errors.
     pub fn new_async_with_dma<T: Instance>(
         peri: Peri<'d, T>,
         scl: Peri<'d, impl SclPin<T>>,
@@ -774,14 +1168,21 @@ impl<'d> AsyncEngine for I2c<'d, Dma<'d>> {
             return Err(IOError::InvalidReadBufferLength);
         }
 
-        // perform corrective action if the future is dropped
-        let on_drop = OnDrop::new(|| {
-            self.remediation();
-            self.info.regs().mder().modify(|w| w.set_rdde(false));
-        });
-
         for chunk in read.chunks_mut(256) {
             self.async_start(address, true).await?;
+
+            // perform corrective action if the future is dropped or an
+            // error happens between here and the end of the read.
+            //
+            // NOTE: this *must* be set up *after* async_start. async_start
+            // already runs `status_and_act`, which on NACK performs its
+            // own remediation; if we set OnDrop earlier, the early `?`
+            // return would invoke remediation a second time and corrupt
+            // the controller state for the next transaction.
+            let on_drop = OnDrop::new(|| {
+                self.remediation();
+                self.info.regs().mder().modify(|w| w.set_rdde(false));
+            });
 
             // send receive command
             self.send_cmd(Cmd::RECEIVE, (chunk.len() - 1) as u8);
@@ -799,9 +1200,12 @@ impl<'d> AsyncEngine for I2c<'d, Dma<'d>> {
                 self.mode.rx_dma.set_request_source(self.mode.rx_request);
 
                 // Configure TCD for peripheral-to-memory transfer
-                self.mode
-                    .rx_dma
-                    .setup_read_from_peripheral(peri_addr, chunk, EnableInterrupt::Yes);
+                self.mode.rx_dma.setup_read_from_peripheral(
+                    peri_addr,
+                    chunk,
+                    false,
+                    TransferOptions::COMPLETE_INTERRUPT,
+                )?;
 
                 // Enable I2C RX DMA request
                 self.info.regs().mder().modify(|w| w.set_rdde(true));
@@ -812,7 +1216,7 @@ impl<'d> AsyncEngine for I2c<'d, Dma<'d>> {
 
             // Wait for completion asynchronously
             core::future::poll_fn(|cx| {
-                self.mode.rx_dma.waker().register(cx.waker());
+                let _ = self.mode.rx_dma.wait_cell().poll_wait(cx);
                 if self.mode.rx_dma.is_done() {
                     core::task::Poll::Ready(())
                 } else {
@@ -829,14 +1233,14 @@ impl<'d> AsyncEngine for I2c<'d, Dma<'d>> {
                 self.mode.rx_dma.disable_request();
                 self.mode.rx_dma.clear_done();
             }
+
+            // defuse it; we'll re-arm on the next chunk if any.
+            on_drop.defuse();
         }
 
         if send_stop == SendStop::Yes {
             self.async_stop().await?;
         }
-
-        // defuse it if the future is not dropped
-        on_drop.defuse();
 
         Ok(())
     }
@@ -882,9 +1286,12 @@ impl<'d> AsyncEngine for I2c<'d, Dma<'d>> {
                 self.mode.tx_dma.set_request_source(self.mode.tx_request);
 
                 // Configure TCD for memory-to-peripheral transfer
-                self.mode
-                    .tx_dma
-                    .setup_write_to_peripheral(chunk, peri_addr, EnableInterrupt::Yes);
+                self.mode.tx_dma.setup_write_to_peripheral(
+                    chunk,
+                    peri_addr,
+                    false,
+                    TransferOptions::COMPLETE_INTERRUPT,
+                )?;
 
                 // Enable I2C TX DMA request
                 self.info.regs().mder().modify(|w| w.set_tdde(true));
@@ -895,7 +1302,7 @@ impl<'d> AsyncEngine for I2c<'d, Dma<'d>> {
 
             // Wait for completion asynchronously
             core::future::poll_fn(|cx| {
-                self.mode.tx_dma.waker().register(cx.waker());
+                let _ = self.mode.tx_dma.wait_cell().poll_wait(cx);
                 if self.mode.tx_dma.is_done() {
                     core::task::Poll::Ready(())
                 } else {

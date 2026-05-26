@@ -6,7 +6,7 @@
 [subrepo]
 	remote = https://github.com/embassy-rs/embassy.git
 	branch = main
-	commit = fec691889d9f86765ad0f095719c4c6125429339
+	commit = 4bf217e8b59df60f34820d62dc01094714c6dae2
 	parent = 3fb509860d9365f5aca615ce7ccf13cf9bd9c643
 	method = merge
 	cmdver = 0.4.9

@@ -25,11 +25,12 @@ pub mod adc;
 pub mod aon_timer;
 #[cfg(feature = "_rp235x")]
 pub mod block;
-#[cfg(feature = "rp2040")]
 pub mod bootsel;
 pub mod clocks;
 pub(crate) mod datetime;
 pub mod dma;
+#[cfg(any(feature = "executor-thread", feature = "executor-interrupt"))]
+pub mod executor;
 pub mod flash;
 #[cfg(feature = "rp2040")]
 mod float;
