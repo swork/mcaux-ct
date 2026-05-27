@@ -111,7 +111,6 @@ async fn cyw43_task(
     runner: cyw43::Runner<
         'static,
         cyw43::SpiBus<Output<'static>, PioSpi<'static, PIO0, 0>>,
-        cyw43::Cyw43439,
     >,
 ) -> ! {
     runner.run().await
@@ -247,7 +246,6 @@ async fn main(spawner: Spawner) -> () {
         p.PIN_24,
         p.PIN_29,
         dma::Channel::new(p.DMA_CH0, Irqs),
-        dma::Channel::new(p.DMA_CH1, Irqs),
     );
 
     static STATE: StaticCell<cyw43::State> = StaticCell::new();
