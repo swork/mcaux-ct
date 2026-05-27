@@ -24,3 +24,5 @@ tasks:
   - archive: |
       # Explore Artifact features in GraphQL API
       # git clone git@git.sr.ht:~scwork/archive a
+      m/mcaux/b/archive/mcaux_latest_pico2w.tar.gz
+      m/mcaux/b/public/release.bin.version
