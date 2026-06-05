@@ -1,9 +1,6 @@
 # MCAux-CT
 
- - [![mcaux](https://github.com/swork/mcaux-ct/actions/workflows/ci-app.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/ci-app.yml)[![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=mcaux)](https://deps.rs/repo/github/swork/mcaux-ct?path=mcaux)
- - [![WASM demo](https://github.com/swork/mcaux-ct/actions/workflows/ci-demo.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/ci-demo.yml)[![dependency status](https://deps.rs/repo/github/swork/mcaux-ct/status.svg?path=demo)](https://deps.rs/repo/github/swork/mcaux-ct?path=demo)
- - [![site](https://github.com/swork/mcaux-ct/actions/workflows/site.yml/badge.svg)](https://github.com/swork/mcaux-ct/actions/workflows/site.yml)
-
+NOTE: Archived in favor of https://git.sr.ht/~scwork/mcaux-ct, 5 June 2026 
 
 This is the repo for mcaux-ct, a motorcycle auxiliary equipment controller, a quixotic art project for my KLR650.
 
